@@ -1,0 +1,28 @@
+# Entorno virtual
+venv/
+.venv/
+env/
+
+# Variables de entorno y llaves secretas (¡NUNCA SUBIR A GIT!)
+.env
+.env.local
+
+# Base de datos SQLite
+*.sqlite3
+db.sqlite3
+
+# Cache de Python y Pytest
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Archivos temporales de importación Excel
+temp_*.xlsx
+_temp_*.xlsx
+
+# Configuración IDE y OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

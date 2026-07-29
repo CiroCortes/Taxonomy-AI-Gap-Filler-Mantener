@@ -1,0 +1,9 @@
+from django.urls import path
+from taxonomy import views
+
+app_name = 'taxonomy'
+
+urlpatterns = [
+    path('', views.sku_list_view, name='sku_list'),
+    path('sku/<int:pk>/process_ai/', views.process_single_sku_ai, name='process_single_sku_ai'),
+]

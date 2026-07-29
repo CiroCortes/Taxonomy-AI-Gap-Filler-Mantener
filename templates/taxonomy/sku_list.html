@@ -1,0 +1,281 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard | PESCO S.A. Maestro de Artículos{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-bar {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .search-box {
+        display: flex;
+        gap: 0.5rem;
+        flex: 1;
+        min-width: 280px;
+    }
+
+    .form-input {
+        background-color: var(--bg-dark);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        padding: 0.5rem 0.85rem;
+        border-radius: 0.5rem;
+        font-size: 0.9rem;
+        outline: none;
+        width: 100%;
+    }
+
+    .form-input:focus {
+        border-color: var(--accent-blue);
+    }
+
+    .table-container {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+        font-size: 0.875rem;
+    }
+
+    th {
+        background-color: #0f172a;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-size: 0.75rem;
+    }
+
+    td {
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    tr:hover td {
+        background-color: var(--bg-card-hover);
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .rationale-text {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+        max-width: 250px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- KPI Summary Cards -->
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <div class="kpi-title">Total SKUs SAP</div>
+        <div class="kpi-value blue">{{ total_count|default:"20.297" }}</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-title">Pendientes Clase</div>
+        <div class="kpi-value rose">{{ sin_clase_count|default:"1.076" }}</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-title">Pendientes Familia</div>
+        <div class="kpi-value amber">{{ sin_familia_count|default:"4.592" }}</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-title">Pendientes SubFamilia</div>
+        <div class="kpi-value amber">{{ sin_subfamilia_count|default:"3.627" }}</div>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<form method="GET" action="{% url 'taxonomy:sku_list' %}" class="filter-bar">
+    <div class="search-box">
+        <input type="text" name="q" value="{{ query }}" placeholder="Buscar por código, descripción o grupo..." class="form-input">
+        <button type="submit" class="btn btn-primary">Buscar</button>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <select name="status" class="form-input" style="width: 150px;" onchange="this.form.submit()">
+            <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Todos los estados</option>
+            <option value="incomplete" {% if status_filter == 'incomplete' %}selected{% endif %}>Incompletos (Pendientes)</option>
+            <option value="complete" {% if status_filter == 'complete' %}selected{% endif %}>Completos</option>
+        </select>
+        {% if query or status_filter != 'all' or clase_filter %}
+            <a href="{% url 'taxonomy:sku_list' %}" class="btn btn-secondary">Limpiar</a>
+        {% endif %}
+    </div>
+</form>
+
+<!-- Data Table -->
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>Código SKU</th>
+                <th>Descripción del Artículo</th>
+                <th>Grupo</th>
+                <th>Clase</th>
+                <th>Familia</th>
+                <th>SubFamilia</th>
+                <th>Categoría</th>
+                <th>Estado Taxonómico</th>
+                <th>Acciones IA</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sku in page_obj %}
+            <tr id="sku-row-{{ sku.pk }}">
+                <td><strong>{{ sku.item_code }}</strong></td>
+                <td>{{ sku.item_name }}</td>
+                <td><span class="badge badge-info">{{ sku.nombre_grupo|default:"N/A" }}</span></td>
+                <td id="sku-clase-{{ sku.pk }}">{{ sku.clase|default:"--" }}</td>
+                <td id="sku-familia-{{ sku.pk }}">{{ sku.familia|default:"--" }}</td>
+                <td id="sku-subfamilia-{{ sku.pk }}">{{ sku.subfamilia|default:"--" }}</td>
+                <td id="sku-categoria-{{ sku.pk }}">{{ sku.categoria|default:"--" }}</td>
+                <td id="sku-status-{{ sku.pk }}">
+                    {% if sku.is_incomplete %}
+                        <span class="badge badge-warning">Incompleto</span>
+                    {% else %}
+                        <span class="badge badge-success">Completo</span>
+                    {% endif %}
+                    {% if sku.ai_confidence_score %}
+                        <div style="font-size: 0.7rem; color: var(--accent-emerald); margin-top: 0.2rem;">
+                            Confianza IA: {{ sku.ai_confidence_score|stringformat:".2f" }}
+                        </div>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if sku.is_incomplete %}
+                        <button id="ai-btn-{{ sku.pk }}" onclick="triggerAiSingle({{ sku.pk }})" class="btn btn-primary" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;">
+                            ✨ Clasificar IA
+                        </button>
+                    {% else %}
+                        <button onclick="triggerAiSingle({{ sku.pk }})" class="btn btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;">
+                            🔄 Re-evaluar
+                        </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                    No se encontraron registros que coincidan con la búsqueda.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    <div class="pagination">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} (Mostrando {{ page_obj.object_list|length }} de {{ page_obj.paginator.count }} registros)
+        </span>
+        <div style="display: flex; gap: 0.5rem;">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}&q={{ query }}&status={{ status_filter }}" class="btn btn-secondary">Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}" class="btn btn-secondary">Siguiente</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function triggerAiSingle(pk) {
+        const btn = document.getElementById(`ai-btn-${pk}`);
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = "⏳ Procesando...";
+        }
+
+        fetch(`/sku/${pk}/process_ai/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.clase) document.getElementById(`sku-clase-${pk}`).innerText = data.clase;
+                if (data.familia) document.getElementById(`sku-familia-${pk}`).innerText = data.familia;
+                if (data.subfamilia) document.getElementById(`sku-subfamilia-${pk}`).innerText = data.subfamilia;
+                if (data.categoria) document.getElementById(`sku-categoria-${pk}`).innerText = data.categoria;
+
+                const statusTd = document.getElementById(`sku-status-${pk}`);
+                if (!data.is_incomplete) {
+                    statusTd.innerHTML = `<span class="badge badge-success">Completo</span>
+                        <div style="font-size: 0.7rem; color: var(--accent-emerald); margin-top: 0.2rem;">Confianza IA: ${data.confidence.toFixed(2)}</div>`;
+                } else {
+                    statusTd.innerHTML = `<span class="badge badge-warning">Incompleto</span>
+                        <div style="font-size: 0.7rem; color: var(--accent-emerald); margin-top: 0.2rem;">Confianza IA: ${data.confidence.toFixed(2)}</div>`;
+                }
+
+                if (btn) {
+                    btn.disabled = false;
+                    btn.className = "btn btn-secondary";
+                    btn.innerText = "🔄 Re-evaluar";
+                }
+            } else {
+                alert("Error al procesar con IA: " + data.error);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = "✨ Clasificar IA";
+                }
+            }
+        })
+        .catch(err => {
+            alert("Error de conexión: " + err);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = "✨ Clasificar IA";
+            }
+        });
+    }
+</script>
+{% endblock %}
