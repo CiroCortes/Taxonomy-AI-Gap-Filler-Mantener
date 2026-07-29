@@ -169,7 +169,7 @@
 <!-- KPI Summary Cards Clickeables Uniformes -->
 <div class="kpi-grid">
     <a href="{% url 'taxonomy:sku_list' %}" class="kpi-link">
-        <div class="kpi-card {% if not missing_filter and status_filter == 'all' and not clase_filter and not familia_filter and not subfamilia_filter and not categoria_filter %}active{% endif %}">
+        <div class="kpi-card {% if not missing_filter and status_filter == 'all' and not clase_filter and not familia_filter and not subfamilia_filter and not modelo_filter and not categoria_filter %}active{% endif %}">
             <div class="kpi-title">Total SKUs SAP</div>
             <div class="kpi-value blue">{{ total_count }}</div>
         </div>
@@ -211,7 +211,7 @@
     <!-- Fila 1: Búsqueda y Estado -->
     <div class="filter-row">
         <div class="search-box">
-            <input type="text" name="q" value="{{ query }}" placeholder="Buscar por código SKU, descripción o nombre de grupo..." class="form-input" style="width: 100%;">
+            <input type="text" name="q" value="{{ query }}" placeholder="Buscar por código SKU, descripción, grupo o modelo..." class="form-input" style="width: 100%;">
             <button type="submit" class="btn btn-primary">Buscar</button>
         </div>
 
@@ -239,7 +239,7 @@
             <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">Filtrar por:</span>
 
             <!-- Filtro Clase -->
-            <select name="clase" class="form-input" style="max-width: 200px;" onchange="this.form.submit()">
+            <select name="clase" class="form-input" style="max-width: 180px;" onchange="this.form.submit()">
                 <option value="">Todas las Clases</option>
                 {% for item in clases_list %}
                     <option value="{{ item }}" {% if clase_filter == item %}selected{% endif %}>{{ item }}</option>
@@ -247,7 +247,7 @@
             </select>
 
             <!-- Filtro Familia -->
-            <select name="familia" class="form-input" style="max-width: 200px;" onchange="this.form.submit()">
+            <select name="familia" class="form-input" style="max-width: 180px;" onchange="this.form.submit()">
                 <option value="">Todas las Familias</option>
                 {% for item in familias_list %}
                     <option value="{{ item }}" {% if familia_filter == item %}selected{% endif %}>{{ item }}</option>
@@ -255,22 +255,30 @@
             </select>
 
             <!-- Filtro SubFamilia (Marca) -->
-            <select name="subfamilia" class="form-input" style="max-width: 220px;" onchange="this.form.submit()">
+            <select name="subfamilia" class="form-input" style="max-width: 200px;" onchange="this.form.submit()">
                 <option value="">Todas las SubFamilias (Marcas)</option>
                 {% for item in subfamilias_list %}
                     <option value="{{ item }}" {% if subfamilia_filter == item %}selected{% endif %}>{{ item }}</option>
                 {% endfor %}
             </select>
 
+            <!-- Filtro Modelo -->
+            <select name="modelo" class="form-input" style="max-width: 180px;" onchange="this.form.submit()">
+                <option value="">Todos los Modelos</option>
+                {% for item in modelos_list %}
+                    <option value="{{ item }}" {% if modelo_filter == item %}selected{% endif %}>{{ item }}</option>
+                {% endfor %}
+            </select>
+
             <!-- Filtro Categoría -->
-            <select name="categoria" class="form-input" style="max-width: 200px;" onchange="this.form.submit()">
+            <select name="categoria" class="form-input" style="max-width: 180px;" onchange="this.form.submit()">
                 <option value="">Todas las Categorías</option>
                 {% for item in categorias_list %}
                     <option value="{{ item }}" {% if categoria_filter == item %}selected{% endif %}>{{ item }}</option>
                 {% endfor %}
             </select>
 
-            {% if query or status_filter != 'all' or missing_filter or clase_filter or familia_filter or subfamilia_filter or categoria_filter %}
+            {% if query or status_filter != 'all' or missing_filter or clase_filter or familia_filter or subfamilia_filter or modelo_filter or categoria_filter %}
                 <a href="{% url 'taxonomy:sku_list' %}" class="btn btn-secondary" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">Limpiar Filtros</a>
             {% endif %}
         </div>
@@ -283,7 +291,7 @@
     </div>
 {% endif %}
 
-<!-- Data Table -->
+<!-- Data Table con columna Modelo al lado de SubFamilia (Marca) -->
 <div class="table-container">
     <table>
         <thead>
@@ -294,6 +302,7 @@
                 <th>Clase</th>
                 <th>Familia</th>
                 <th>SubFamilia (Marca)</th>
+                <th>Modelo</th>
                 <th>Categoría</th>
                 <th>Estado Auditado</th>
                 <th>Acciones IA</th>
@@ -308,6 +317,7 @@
                 <td id="sku-clase-{{ sku.pk }}">{{ sku.clase|default:"--" }}</td>
                 <td id="sku-familia-{{ sku.pk }}">{{ sku.familia|default:"--" }}</td>
                 <td id="sku-subfamilia-{{ sku.pk }}">{{ sku.subfamilia|default:"--" }}</td>
+                <td id="sku-modelo-{{ sku.pk }}">{{ sku.modelo|default:"--" }}</td>
                 <td id="sku-categoria-{{ sku.pk }}">{{ sku.categoria|default:"--" }}</td>
                 <td id="sku-status-{{ sku.pk }}">
                     {% if sku.is_incomplete %}
@@ -335,7 +345,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">
                     No se encontraron registros que coincidan con los filtros seleccionados.
                 </td>
             </tr>
@@ -350,10 +360,10 @@
         </span>
         <div style="display: flex; gap: 0.5rem;">
             {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}&q={{ query }}&status={{ status_filter }}&missing={{ missing_filter }}&clase={{ clase_filter }}&familia={{ familia_filter }}&subfamilia={{ subfamilia_filter }}&categoria={{ categoria_filter }}" class="btn btn-secondary">Anterior</a>
+                <a href="?page={{ page_obj.previous_page_number }}&q={{ query }}&status={{ status_filter }}&missing={{ missing_filter }}&clase={{ clase_filter }}&familia={{ familia_filter }}&subfamilia={{ subfamilia_filter }}&modelo={{ modelo_filter }}&categoria={{ categoria_filter }}" class="btn btn-secondary">Anterior</a>
             {% endif %}
             {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}&missing={{ missing_filter }}&clase={{ clase_filter }}&familia={{ familia_filter }}&subfamilia={{ subfamilia_filter }}&categoria={{ categoria_filter }}" class="btn btn-secondary">Siguiente</a>
+                <a href="?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}&missing={{ missing_filter }}&clase={{ clase_filter }}&familia={{ familia_filter }}&subfamilia={{ subfamilia_filter }}&modelo={{ modelo_filter }}&categoria={{ categoria_filter }}" class="btn btn-secondary">Siguiente</a>
             {% endif %}
         </div>
     </div>

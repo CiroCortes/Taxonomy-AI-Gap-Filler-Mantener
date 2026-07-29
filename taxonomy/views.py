@@ -25,12 +25,13 @@ def sku_list_view(request):
     clase_filter = request.GET.get('clase', '').strip()
     familia_filter = request.GET.get('familia', '').strip()
     subfamilia_filter = request.GET.get('subfamilia', '').strip()
+    modelo_filter = request.GET.get('modelo', '').strip()
     categoria_filter = request.GET.get('categoria', '').strip()
 
     skus = SKUItem.objects.all().order_by('item_code')
 
     if query:
-        skus = skus.filter(Q(item_code__icontains=query) | Q(item_name__icontains=query) | Q(nombre_grupo__icontains=query))
+        skus = skus.filter(Q(item_code__icontains=query) | Q(item_name__icontains=query) | Q(nombre_grupo__icontains=query) | Q(modelo__icontains=query))
 
     if status_filter == 'incomplete':
         skus = skus.filter(is_incomplete=True)
@@ -56,6 +57,8 @@ def sku_list_view(request):
         skus = skus.filter(familia=familia_filter)
     if subfamilia_filter:
         skus = skus.filter(subfamilia=subfamilia_filter)
+    if modelo_filter:
+        skus = skus.filter(modelo=modelo_filter)
     if categoria_filter:
         skus = skus.filter(categoria=categoria_filter)
 
@@ -72,6 +75,7 @@ def sku_list_view(request):
     clases_list = SKUItem.objects.exclude(clase__isnull=True).exclude(clase='').values_list('clase', flat=True).distinct().order_by('clase')
     familias_list = SKUItem.objects.exclude(familia__isnull=True).exclude(familia='').values_list('familia', flat=True).distinct().order_by('familia')
     subfamilias_list = SKUItem.objects.exclude(subfamilia__isnull=True).exclude(subfamilia='').values_list('subfamilia', flat=True).distinct().order_by('subfamilia')
+    modelos_list = SKUItem.objects.exclude(modelo__isnull=True).exclude(modelo='').values_list('modelo', flat=True).distinct().order_by('modelo')[:100]
     categorias_list = SKUItem.objects.exclude(categoria__isnull=True).exclude(categoria='').values_list('categoria', flat=True).distinct().order_by('categoria')
 
     paginator = Paginator(skus, 25)
@@ -86,6 +90,7 @@ def sku_list_view(request):
         'clase_filter': clase_filter,
         'familia_filter': familia_filter,
         'subfamilia_filter': subfamilia_filter,
+        'modelo_filter': modelo_filter,
         'categoria_filter': categoria_filter,
         'total_count': total_count,
         'sin_clase_count': sin_clase_count,
@@ -97,6 +102,7 @@ def sku_list_view(request):
         'clases_list': clases_list,
         'familias_list': familias_list,
         'subfamilias_list': subfamilias_list,
+        'modelos_list': modelos_list,
         'categorias_list': categorias_list,
     }
     return render(request, 'taxonomy/sku_list.html', context)
@@ -184,12 +190,6 @@ def export_ti_excel_view(request):
     # Estilos de Excel
     header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
     header_fill = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid')
-    thin_border = Border(
-        left=Side(style='thin', color='D9D9D9'),
-        right=Side(style='thin', color='D9D9D9'),
-        top=Side(style='thin', color='D9D9D9'),
-        bottom=Side(style='thin', color='D9D9D9')
-    )
 
     headers = [
         'ItemCode (SAP)', 'ItemName (Descripción)', 'Nombre Grupo',
