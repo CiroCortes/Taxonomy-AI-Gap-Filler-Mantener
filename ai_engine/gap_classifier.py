@@ -5,8 +5,8 @@ from pydantic import BaseModel, Field
 
 
 class DynamicTaxonomyFill(BaseModel):
-    clase: Optional[str] = Field(None, description="Clase asignada si faltaba")
-    familia: Optional[str] = Field(None, description="Familia asignada dentro del catálogo PESCO")
+    clase: Optional[str] = Field(None, description="Clase asignada elegida estrictamente del catálogo oficial de SAP PESCO")
+    familia: Optional[str] = Field(None, description="Familia asignada elegida estrictamente del catálogo oficial de SAP PESCO")
     subfamilia: Optional[str] = Field(None, description="Subfamilia/Marca asignada")
     categoria: Optional[str] = Field(None, description="Categoría operacional")
     confidence: float = Field(..., description="Nivel de certeza de 0.0 a 1.0")
@@ -19,7 +19,6 @@ class GeminiGapClassifier:
         self.use_google_genai = False
         self.use_google_generativeai = False
 
-        # Attempt to initialize google.genai first (new SDK), fallback to google.generativeai
         try:
             from google import genai
             self.client = genai.Client(api_key=api_key)
@@ -42,10 +41,12 @@ class GeminiGapClassifier:
         grupo: str,
         current_data: Dict[str, Any],
         missing_fields: List[str],
-        rag_context: List[Dict[str, Any]]
+        rag_context: List[Dict[str, Any]],
+        allowed_clases: Optional[List[str]] = None,
+        allowed_familias: Optional[List[str]] = None
     ) -> DynamicTaxonomyFill:
         examples_str = "\n".join([
-            f"- Similar: {item.get('item_name', '')} -> Familia: {item.get('familia', '')}, SubFamilia: {item.get('subfamilia', '')}"
+            f"- Similar: {item.get('item_name', '')} -> Clase: {item.get('clase', '')}, Familia: {item.get('familia', '')}, SubFamilia: {item.get('subfamilia', '')}"
             for item in rag_context
         ]) if rag_context else "Ninguno disponible."
 
@@ -55,12 +56,30 @@ class GeminiGapClassifier:
             else DynamicTaxonomyFill.schema_json()
         )
 
+        clases_str = json.dumps(allowed_clases, ensure_ascii=False) if allowed_clases else "Cualquiera adecuada"
+        familias_str = json.dumps(allowed_familias, ensure_ascii=False) if allowed_familias else "Cualquiera adecuada"
+
         prompt = f'''
-Eres un especialista en catalogación de maquinaria pesada y repuestos para PESCO S.A.
+Eres un especialista estricto en catalogación de repuestos y equipos para PESCO S.A.
 Rellena EXCLUSIVAMENTE los campos faltantes: {missing_fields}
 
-SKU: {item_name} | Grupo: {grupo} | Datos Actuales: {json.dumps(current_data, ensure_ascii=False)}
-Ejemplos RAG Reales:
+REGLAS DE ORO ANTI-ALUCINACIÓN (ESTRICTO SAP ERP PESCO):
+1. Para el campo 'clase', DEBES seleccionar EXCLUSIVAMENTE un valor contenido dentro de esta lista oficial de SAP:
+{clases_str}
+NO INVENTES NINGUNA CLASE QUE NO ESTÉ EN ESTA LISTA.
+
+2. Para el campo 'familia', DEBES seleccionar EXCLUSIVAMENTE un valor contenido dentro de esta lista oficial de SAP:
+{familias_str}
+NO INVENTES NINGUNA FAMILIA QUE NO ESTÉ EN ESTA LISTA. (Por ejemplo: NUNCA uses 'Químicos' si no pertenece a la lista).
+
+3. Si no encuentras una coincidencia oficial válida en las listas con alta certeza, no asignes valores inventados.
+
+DATOS DEL ARTÍCULO:
+- SKU / Descripción: {item_name}
+- Grupo SAP: {grupo}
+- Datos Actuales: {json.dumps(current_data, ensure_ascii=False)}
+
+EJEMPLOS DE CATALOGACIÓN REAL PESCO (RAG):
 {examples_str}
 
 Responde siguiendo la estructura JSON:

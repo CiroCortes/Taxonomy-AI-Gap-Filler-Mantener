@@ -109,7 +109,7 @@ def sku_list_view(request):
 
 
 def process_single_sku_ai(request, pk):
-    """Vista AJAX para procesar la IA en un único SKU."""
+    """Vista AJAX para procesar la IA en un único SKU con restricciones estrictas de SAP."""
     if request.method != 'POST':
         return JsonResponse({'error': 'Método no permitido'}, status=405)
 
@@ -124,7 +124,7 @@ def process_single_sku_ai(request, pk):
         rag_matches = list(SKUItem.objects.filter(
             is_incomplete=False,
             nombre_grupo=sku.nombre_grupo
-        ).values('item_name', 'familia', 'subfamilia')[:3])
+        ).values('item_name', 'clase', 'familia', 'subfamilia')[:3])
 
         current_data = {
             "clase": sku.clase,
@@ -133,20 +133,30 @@ def process_single_sku_ai(request, pk):
             "categoria": sku.categoria
         }
 
+        allowed_clases = list(SKUItem.objects.exclude(clase__isnull=True).exclude(clase='').values_list('clase', flat=True).distinct())
+        allowed_familias = list(SKUItem.objects.exclude(familia__isnull=True).exclude(familia='').values_list('familia', flat=True).distinct())
+
         result = classifier.fill_missing_fields(
             sku.item_name,
             sku.nombre_grupo or "",
             current_data,
             sku.pending_fields,
-            rag_matches
+            rag_matches,
+            allowed_clases=allowed_clases,
+            allowed_familias=allowed_familias
         )
 
         if "clase" in sku.pending_fields and result.clase:
-            sku.clase = result.clase
+            if not allowed_clases or result.clase in allowed_clases:
+                sku.clase = result.clase
+
         if "familia" in sku.pending_fields and result.familia:
-            sku.familia = result.familia
+            if not allowed_familias or result.familia in allowed_familias:
+                sku.familia = result.familia
+
         if "subfamilia" in sku.pending_fields and result.subfamilia:
             sku.subfamilia = result.subfamilia
+
         if "categoria" in sku.pending_fields and result.categoria:
             sku.categoria = result.categoria
 
@@ -165,6 +175,44 @@ def process_single_sku_ai(request, pk):
             'categoria': sku.categoria,
             'confidence': sku.ai_confidence_score,
             'rationale': sku.ai_rationale,
+            'is_incomplete': sku.is_incomplete,
+            'pending_fields': sku.pending_fields,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def update_sku_taxonomy(request, pk):
+    """Vista AJAX para modificación manual de la taxonomía por parte del usuario."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    sku = get_object_or_404(SKUItem, pk=pk)
+    try:
+        data = json.loads(request.body)
+        sku.clase = data.get('clase', sku.clase)
+        sku.familia = data.get('familia', sku.familia)
+        sku.subfamilia = data.get('subfamilia', sku.subfamilia)
+        sku.modelo = data.get('modelo', sku.modelo)
+        sku.categoria = data.get('categoria', sku.categoria)
+
+        # Limpiar vacíos a None
+        sku.clase = sku.clase.strip() if sku.clase and sku.clase.strip() else None
+        sku.familia = sku.familia.strip() if sku.familia and sku.familia.strip() else None
+        sku.subfamilia = sku.subfamilia.strip() if sku.subfamilia and sku.subfamilia.strip() else None
+        sku.modelo = sku.modelo.strip() if sku.modelo and sku.modelo.strip() else None
+        sku.categoria = sku.categoria.strip() if sku.categoria and sku.categoria.strip() else None
+
+        sku.check_incomplete()
+        sku.save()
+
+        return JsonResponse({
+            'success': True,
+            'clase': sku.clase or '--',
+            'familia': sku.familia or '--',
+            'subfamilia': sku.subfamilia or '--',
+            'modelo': sku.modelo or '--',
+            'categoria': sku.categoria or '--',
             'is_incomplete': sku.is_incomplete,
             'pending_fields': sku.pending_fields,
         })

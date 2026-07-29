@@ -162,6 +162,48 @@
     .btn-export:hover {
         opacity: 0.9;
     }
+
+    /* Estilos Modal de Edición Manual */
+    .modal-backdrop {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(4px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-content {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        width: 100%;
+        max-width: 520px;
+        padding: 1.5rem;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.25rem;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.75rem;
+    }
+    .modal-title { font-size: 1.1rem; font-weight: 700; }
+    .modal-body { display: flex; flex-direction: column; gap: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+    .form-label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+    .modal-footer {
+        margin-top: 1.5rem;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        border-top: 1px solid var(--border-color);
+        padding-top: 1rem;
+    }
 </style>
 {% endblock %}
 
@@ -291,7 +333,7 @@
     </div>
 {% endif %}
 
-<!-- Data Table con columna Modelo al lado de SubFamilia (Marca) -->
+<!-- Data Table -->
 <div class="table-container">
     <table>
         <thead>
@@ -305,7 +347,7 @@
                 <th>Modelo</th>
                 <th>Categoría</th>
                 <th>Estado Auditado</th>
-                <th>Acciones IA</th>
+                <th>Acciones</th>
             </tr>
         </thead>
         <tbody>
@@ -326,21 +368,26 @@
                         <span class="badge badge-success">Completo</span>
                     {% endif %}
                     {% if sku.ai_processed %}
-                        <div style="font-size: 0.7rem; color: var(--accent-emerald); margin-top: 0.2rem;">
+                        <div style="font-size: 0.7rem; color: var(--accent-emerald); margin-top: 0.2rem;" title="{{ sku.ai_rationale }}">
                             ✨ Evaluado por IA (Confianza: {{ sku.ai_confidence_score|stringformat:".2f" }})
                         </div>
                     {% endif %}
                 </td>
                 <td>
-                    {% if sku.is_incomplete %}
-                        <button id="ai-btn-{{ sku.pk }}" onclick="triggerAiSingle({{ sku.pk }})" class="btn btn-primary" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;">
-                            ✨ Clasificar IA
+                    <div style="display: flex; gap: 0.35rem; align-items: center;">
+                        {% if sku.is_incomplete %}
+                            <button id="ai-btn-{{ sku.pk }}" onclick="triggerAiSingle({{ sku.pk }})" class="btn btn-primary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem;">
+                                ✨ IA
+                            </button>
+                        {% else %}
+                            <button id="ai-btn-{{ sku.pk }}" onclick="triggerAiSingle({{ sku.pk }})" class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem;">
+                                🔄 IA
+                            </button>
+                        {% endif %}
+                        <button onclick="openEditModal({{ sku.pk }}, '{{ sku.item_code|escapejs }}', '{{ sku.item_name|escapejs }}', '{{ sku.clase|default:""|escapejs }}', '{{ sku.familia|default:""|escapejs }}', '{{ sku.subfamilia|default:""|escapejs }}', '{{ sku.modelo|default:""|escapejs }}', '{{ sku.categoria|default:""|escapejs }}')" class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem;" title="Edición manual directa">
+                            ✏️ Editar
                         </button>
-                    {% else %}
-                        <button id="ai-btn-{{ sku.pk }}" onclick="triggerAiSingle({{ sku.pk }})" class="btn btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;">
-                            🔄 Re-evaluar
-                        </button>
-                    {% endif %}
+                    </div>
                 </td>
             </tr>
             {% empty %}
@@ -365,6 +412,76 @@
             {% if page_obj.has_next %}
                 <a href="?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}&missing={{ missing_filter }}&clase={{ clase_filter }}&familia={{ familia_filter }}&subfamilia={{ subfamilia_filter }}&modelo={{ modelo_filter }}&categoria={{ categoria_filter }}" class="btn btn-secondary">Siguiente</a>
             {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Edición Manual de Taxonomía -->
+<div id="editModal" class="modal-backdrop">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">✏️ Edición Manual de Taxonomía</h3>
+            <button type="button" onclick="closeEditModal()" class="btn btn-secondary" style="padding: 0.2rem 0.5rem;">✕</button>
+        </div>
+        <div class="modal-body">
+            <div style="font-size: 0.85rem; color: var(--accent-blue); font-weight: 600;" id="modalSkuCode"></div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;" id="modalSkuName"></div>
+            
+            <input type="hidden" id="modalSkuPk">
+
+            <!-- Form Clase -->
+            <div class="form-group">
+                <label class="form-label">Clase (SAP PESCO):</label>
+                <input type="text" id="modalClase" list="clasesDatalist" class="form-input" placeholder="Selecciona o escribe una Clase...">
+                <datalist id="clasesDatalist">
+                    {% for item in clases_list %}
+                        <option value="{{ item }}"></option>
+                    {% endfor %}
+                </datalist>
+            </div>
+
+            <!-- Form Familia -->
+            <div class="form-group">
+                <label class="form-label">Familia (SAP PESCO):</label>
+                <input type="text" id="modalFamilia" list="familiasDatalist" class="form-input" placeholder="Selecciona o escribe una Familia...">
+                <datalist id="familiasDatalist">
+                    {% for item in familias_list %}
+                        <option value="{{ item }}"></option>
+                    {% endfor %}
+                </datalist>
+            </div>
+
+            <!-- Form SubFamilia -->
+            <div class="form-group">
+                <label class="form-label">SubFamilia (Marca):</label>
+                <input type="text" id="modalSubfamilia" list="subfamiliasDatalist" class="form-input" placeholder="Selecciona o escribe SubFamilia/Marca...">
+                <datalist id="subfamiliasDatalist">
+                    {% for item in subfamilias_list %}
+                        <option value="{{ item }}"></option>
+                    {% endfor %}
+                </datalist>
+            </div>
+
+            <!-- Form Modelo -->
+            <div class="form-group">
+                <label class="form-label">Modelo:</label>
+                <input type="text" id="modalModelo" class="form-input" placeholder="Modelo del producto...">
+            </div>
+
+            <!-- Form Categoría -->
+            <div class="form-group">
+                <label class="form-label">Categoría Operacional:</label>
+                <input type="text" id="modalCategoria" list="categoriasDatalist" class="form-input" placeholder="Categoría operacional...">
+                <datalist id="categoriasDatalist">
+                    {% for item in categorias_list %}
+                        <option value="{{ item }}"></option>
+                    {% endfor %}
+                </datalist>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" onclick="closeEditModal()" class="btn btn-secondary">Cancelar</button>
+            <button type="button" onclick="saveManualEdit()" class="btn btn-primary">💾 Guardar Cambios</button>
         </div>
     </div>
 </div>
@@ -416,13 +533,13 @@
                 if (btn) {
                     btn.disabled = false;
                     btn.className = "btn btn-secondary";
-                    btn.innerText = "🔄 Re-evaluar";
+                    btn.innerText = "🔄 IA";
                 }
             } else {
                 alert("Error al procesar con IA: " + data.error);
                 if (btn) {
                     btn.disabled = false;
-                    btn.innerText = "✨ Clasificar IA";
+                    btn.innerText = "✨ IA";
                 }
             }
         })
@@ -430,8 +547,69 @@
             alert("Error de conexión: " + err);
             if (btn) {
                 btn.disabled = false;
-                btn.innerText = "✨ Clasificar IA";
+                btn.innerText = "✨ IA";
             }
+        });
+    }
+
+    function openEditModal(pk, code, name, clase, familia, subfamilia, modelo, categoria) {
+        document.getElementById('modalSkuPk').value = pk;
+        document.getElementById('modalSkuCode').innerText = "SKU: " + code;
+        document.getElementById('modalSkuName').innerText = name;
+        document.getElementById('modalClase').value = clase;
+        document.getElementById('modalFamilia').value = familia;
+        document.getElementById('modalSubfamilia').value = subfamilia;
+        document.getElementById('modalModelo').value = modelo;
+        document.getElementById('modalCategoria').value = categoria;
+
+        document.getElementById('editModal').classList.add('open');
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').classList.remove('open');
+    }
+
+    function saveManualEdit() {
+        const pk = document.getElementById('modalSkuPk').value;
+        const payload = {
+            clase: document.getElementById('modalClase').value,
+            familia: document.getElementById('modalFamilia').value,
+            subfamilia: document.getElementById('modalSubfamilia').value,
+            modelo: document.getElementById('modalModelo').value,
+            categoria: document.getElementById('modalCategoria').value,
+        };
+
+        fetch(`/sku/${pk}/update_taxonomy/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById(`sku-clase-${pk}`).innerText = data.clase;
+                document.getElementById(`sku-familia-${pk}`).innerText = data.familia;
+                document.getElementById(`sku-subfamilia-${pk}`).innerText = data.subfamilia;
+                document.getElementById(`sku-modelo-${pk}`).innerText = data.modelo;
+                document.getElementById(`sku-categoria-${pk}`).innerText = data.categoria;
+
+                const statusTd = document.getElementById(`sku-status-${pk}`);
+                if (!data.is_incomplete) {
+                    statusTd.innerHTML = `<span class="badge badge-success">Completo</span>`;
+                } else {
+                    statusTd.innerHTML = `<span class="badge badge-warning">Incompleto</span>`;
+                }
+
+                closeEditModal();
+            } else {
+                alert("Error al guardar edición manual: " + data.error);
+            }
+        })
+        .catch(err => {
+            alert("Error de conexión: " + err);
         });
     }
 </script>

@@ -2,6 +2,7 @@ import os
 import time
 from dotenv import load_dotenv
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 from taxonomy.models import SKUItem
 from ai_engine.gap_classifier import GeminiGapClassifier
 
@@ -31,6 +32,10 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Procesando {total_pending} SKUs pendientes con el motor Gemini...")
 
+        # Obtener listas oficiales de Clases y Familias existentes en SAP ERP
+        allowed_clases = list(SKUItem.objects.exclude(clase__isnull=True).exclude(clase='').values_list('clase', flat=True).distinct())
+        allowed_familias = list(SKUItem.objects.exclude(familia__isnull=True).exclude(familia='').values_list('familia', flat=True).distinct())
+
         processed_ok = 0
         errors = 0
 
@@ -39,7 +44,7 @@ class Command(BaseCommand):
             rag_matches = list(SKUItem.objects.filter(
                 is_incomplete=False,
                 nombre_grupo=sku.nombre_grupo
-            ).values('item_name', 'familia', 'subfamilia')[:3])
+            ).values('item_name', 'clase', 'familia', 'subfamilia')[:3])
 
             current_data = {
                 "clase": sku.clase,
@@ -54,13 +59,20 @@ class Command(BaseCommand):
                     sku.nombre_grupo or "",
                     current_data,
                     sku.pending_fields,
-                    rag_matches
+                    rag_matches,
+                    allowed_clases=allowed_clases,
+                    allowed_familias=allowed_familias
                 )
 
+                # Validar que clase y familia pertenezcan a la lista oficial
                 if "clase" in sku.pending_fields and result.clase:
-                    sku.clase = result.clase
+                    if not allowed_clases or result.clase in allowed_clases:
+                        sku.clase = result.clase
+
                 if "familia" in sku.pending_fields and result.familia:
-                    sku.familia = result.familia
+                    if not allowed_familias or result.familia in allowed_familias:
+                        sku.familia = result.familia
+
                 if "subfamilia" in sku.pending_fields and result.subfamilia:
                     sku.subfamilia = result.subfamilia
                 if "categoria" in sku.pending_fields and result.categoria:
@@ -69,7 +81,6 @@ class Command(BaseCommand):
                 sku.ai_confidence_score = result.confidence
                 sku.ai_rationale = result.rationale
                 sku.ai_processed = True
-                from django.utils import timezone
                 sku.ai_processed_at = timezone.now()
                 sku.check_incomplete()
                 sku.save()
