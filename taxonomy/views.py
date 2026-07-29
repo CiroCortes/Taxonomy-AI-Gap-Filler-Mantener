@@ -22,6 +22,7 @@ def sku_list_view(request):
     missing_filter = request.GET.get('missing', '').strip()  # clase, familia, subfamilia, categoria
 
     # Filtros de taxonomía
+    grupo_filter = request.GET.get('grupo', '').strip()
     clase_filter = request.GET.get('clase', '').strip()
     familia_filter = request.GET.get('familia', '').strip()
     subfamilia_filter = request.GET.get('subfamilia', '').strip()
@@ -51,6 +52,8 @@ def sku_list_view(request):
         skus = skus.filter(Q(categoria__isnull=True) | Q(categoria=''))
 
     # Filtros por valor de atributo
+    if grupo_filter:
+        skus = skus.filter(nombre_grupo=grupo_filter)
     if clase_filter:
         skus = skus.filter(clase=clase_filter)
     if familia_filter:
@@ -72,6 +75,7 @@ def sku_list_view(request):
     ai_processed_count = SKUItem.objects.filter(ai_processed=True).count()
 
     # Listas distintivas para los menús desplegables de filtro
+    grupos_list = SKUItem.objects.exclude(nombre_grupo__isnull=True).exclude(nombre_grupo='').values_list('nombre_grupo', flat=True).distinct().order_by('nombre_grupo')
     clases_list = SKUItem.objects.exclude(clase__isnull=True).exclude(clase='').values_list('clase', flat=True).distinct().order_by('clase')
     familias_list = SKUItem.objects.exclude(familia__isnull=True).exclude(familia='').values_list('familia', flat=True).distinct().order_by('familia')
     subfamilias_list = SKUItem.objects.exclude(subfamilia__isnull=True).exclude(subfamilia='').values_list('subfamilia', flat=True).distinct().order_by('subfamilia')
@@ -87,6 +91,7 @@ def sku_list_view(request):
         'query': query,
         'status_filter': status_filter,
         'missing_filter': missing_filter,
+        'grupo_filter': grupo_filter,
         'clase_filter': clase_filter,
         'familia_filter': familia_filter,
         'subfamilia_filter': subfamilia_filter,
@@ -99,6 +104,7 @@ def sku_list_view(request):
         'sin_categoria_count': sin_categoria_count,
         'incomplete_total': incomplete_total,
         'ai_processed_count': ai_processed_count,
+        'grupos_list': grupos_list,
         'clases_list': clases_list,
         'familias_list': familias_list,
         'subfamilias_list': subfamilias_list,
