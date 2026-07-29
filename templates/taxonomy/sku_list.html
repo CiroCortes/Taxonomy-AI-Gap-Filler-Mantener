@@ -250,7 +250,7 @@
 
 <!-- Filter & Export Bar Avanzada -->
 <form method="GET" action="{% url 'taxonomy:sku_list' %}" class="filter-bar">
-    <!-- Fila 1: Búsqueda y Estado -->
+    <!-- Fila 1: Búsqueda, Estado y Botón Limpiar Filtros -->
     <div class="filter-row">
         <div class="search-box">
             <input type="text" name="q" value="{{ query }}" placeholder="Buscar por código SKU, descripción, grupo o modelo..." class="form-input" style="width: 100%;">
@@ -264,6 +264,11 @@
                 <option value="complete" {% if status_filter == 'complete' %}selected{% endif %}>Completos</option>
                 <option value="ai_processed" {% if status_filter == 'ai_processed' %}selected{% endif %}>Evaluados por IA</option>
             </select>
+
+            <!-- Botón Limpiar Filtros (Siempre Visible) -->
+            <a href="{% url 'taxonomy:sku_list' %}" class="btn btn-secondary" style="white-space: nowrap;">
+                🧹 Limpiar Filtros
+            </a>
 
             <!-- Botones Exportar Informe Excel para TI -->
             <a href="{% url 'taxonomy:export_ti_excel' %}?scope=ai_processed" class="btn btn-export" title="Descargar informe Excel con los SKUs modificados/evaluados por la IA para el equipo de TI">
@@ -281,7 +286,7 @@
             <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-right: 0.2rem;">Filtrar por:</span>
 
             <!-- 1. Filtro Grupo -->
-            <select name="grupo" class="form-input" style="max-width: 170px;" onchange="this.form.submit()">
+            <select name="grupo" class="form-input" style="max-width: 160px;" onchange="this.form.submit()">
                 <option value="">Todos los Grupos</option>
                 {% for item in grupos_list %}
                     <option value="{{ item }}" {% if grupo_filter == item %}selected{% endif %}>{{ item }}</option>
@@ -289,7 +294,7 @@
             </select>
 
             <!-- 2. Filtro Clase -->
-            <select name="clase" class="form-input" style="max-width: 160px;" onchange="this.form.submit()">
+            <select name="clase" class="form-input" style="max-width: 150px;" onchange="this.form.submit()">
                 <option value="">Todas las Clases</option>
                 {% for item in clases_list %}
                     <option value="{{ item }}" {% if clase_filter == item %}selected{% endif %}>{{ item }}</option>
@@ -297,7 +302,7 @@
             </select>
 
             <!-- 3. Filtro Familia -->
-            <select name="familia" class="form-input" style="max-width: 160px;" onchange="this.form.submit()">
+            <select name="familia" class="form-input" style="max-width: 150px;" onchange="this.form.submit()">
                 <option value="">Todas las Familias</option>
                 {% for item in familias_list %}
                     <option value="{{ item }}" {% if familia_filter == item %}selected{% endif %}>{{ item }}</option>
@@ -305,7 +310,7 @@
             </select>
 
             <!-- 4. Filtro SubFamilia (Marca) -->
-            <select name="subfamilia" class="form-input" style="max-width: 190px;" onchange="this.form.submit()">
+            <select name="subfamilia" class="form-input" style="max-width: 180px;" onchange="this.form.submit()">
                 <option value="">Todas las SubFamilias (Marcas)</option>
                 {% for item in subfamilias_list %}
                     <option value="{{ item }}" {% if subfamilia_filter == item %}selected{% endif %}>{{ item }}</option>
@@ -313,7 +318,7 @@
             </select>
 
             <!-- 5. Filtro Modelo -->
-            <select name="modelo" class="form-input" style="max-width: 160px;" onchange="this.form.submit()">
+            <select name="modelo" class="form-input" style="max-width: 150px;" onchange="this.form.submit()">
                 <option value="">Todos los Modelos</option>
                 {% for item in modelos_list %}
                     <option value="{{ item }}" {% if modelo_filter == item %}selected{% endif %}>{{ item }}</option>
@@ -321,16 +326,12 @@
             </select>
 
             <!-- 6. Filtro Categoría -->
-            <select name="categoria" class="form-input" style="max-width: 160px;" onchange="this.form.submit()">
+            <select name="categoria" class="form-input" style="max-width: 150px;" onchange="this.form.submit()">
                 <option value="">Todas las Categorías</option>
                 {% for item in categorias_list %}
                     <option value="{{ item }}" {% if categoria_filter == item %}selected{% endif %}>{{ item }}</option>
                 {% endfor %}
             </select>
-
-            {% if query or status_filter != 'all' or missing_filter or grupo_filter or clase_filter or familia_filter or subfamilia_filter or modelo_filter or categoria_filter %}
-                <a href="{% url 'taxonomy:sku_list' %}" class="btn btn-secondary" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">Limpiar Filtros</a>
-            {% endif %}
         </div>
     </div>
 </form>
