@@ -32,11 +32,22 @@
         border-radius: 0.5rem;
         font-size: 0.9rem;
         outline: none;
-        width: 100%;
     }
 
     .form-input:focus {
         border-color: var(--accent-blue);
+    }
+
+    .kpi-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+
+    .kpi-card.active {
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+        background-color: var(--bg-card-hover);
     }
 
     .table-container {
@@ -82,54 +93,91 @@
         border-top: 1px solid var(--border-color);
     }
 
-    .rationale-text {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-        margin-top: 0.25rem;
-        max-width: 250px;
+    .btn-export {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+    }
+    .btn-export:hover {
+        opacity: 0.9;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- KPI Summary Cards -->
-<div class="kpi-grid">
-    <div class="kpi-card">
-        <div class="kpi-title">Total SKUs SAP</div>
-        <div class="kpi-value blue">{{ total_count|default:"20.297" }}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-title">Pendientes Clase</div>
-        <div class="kpi-value rose">{{ sin_clase_count|default:"1.076" }}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-title">Pendientes Familia</div>
-        <div class="kpi-value amber">{{ sin_familia_count|default:"4.592" }}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-title">Pendientes SubFamilia</div>
-        <div class="kpi-value amber">{{ sin_subfamilia_count|default:"3.627" }}</div>
-    </div>
+<!-- KPI Summary Cards Clickeables -->
+<div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+    <a href="{% url 'taxonomy:sku_list' %}" class="kpi-link">
+        <div class="kpi-card {% if not missing_filter and status_filter == 'all' %}active{% endif %}">
+            <div class="kpi-title">Total SKUs SAP</div>
+            <div class="kpi-value blue">{{ total_count }}</div>
+        </div>
+    </a>
+    <a href="?missing=clase" class="kpi-link">
+        <div class="kpi-card {% if missing_filter == 'clase' %}active{% endif %}">
+            <div class="kpi-title">Pendientes Clase</div>
+            <div class="kpi-value rose">{{ sin_clase_count }}</div>
+        </div>
+    </a>
+    <a href="?missing=familia" class="kpi-link">
+        <div class="kpi-card {% if missing_filter == 'familia' %}active{% endif %}">
+            <div class="kpi-title">Pendientes Familia</div>
+            <div class="kpi-value amber">{{ sin_familia_count }}</div>
+        </div>
+    </a>
+    <a href="?missing=subfamilia" class="kpi-link">
+        <div class="kpi-card {% if missing_filter == 'subfamilia' %}active{% endif %}">
+            <div class="kpi-title">Pendientes SubFamilia</div>
+            <div class="kpi-value amber">{{ sin_subfamilia_count }}</div>
+        </div>
+    </a>
+    <a href="?missing=categoria" class="kpi-link">
+        <div class="kpi-card {% if missing_filter == 'categoria' %}active{% endif %}">
+            <div class="kpi-title">Pendientes Categoría</div>
+            <div class="kpi-value rose">{{ sin_categoria_count }}</div>
+        </div>
+    </a>
+    <a href="?status=ai_processed" class="kpi-link">
+        <div class="kpi-card {% if status_filter == 'ai_processed' %}active{% endif %}">
+            <div class="kpi-title">Evaluados por IA</div>
+            <div class="kpi-value emerald">{{ ai_processed_count }}</div>
+        </div>
+    </a>
 </div>
 
-<!-- Filter Bar -->
+<!-- Filter & Export Bar -->
 <form method="GET" action="{% url 'taxonomy:sku_list' %}" class="filter-bar">
     <div class="search-box">
-        <input type="text" name="q" value="{{ query }}" placeholder="Buscar por código, descripción o grupo..." class="form-input">
+        <input type="text" name="q" value="{{ query }}" placeholder="Buscar por código, descripción o grupo..." class="form-input" style="width: 100%;">
         <button type="submit" class="btn btn-primary">Buscar</button>
     </div>
 
-    <div style="display: flex; gap: 0.75rem; align-items: center;">
-        <select name="status" class="form-input" style="width: 150px;" onchange="this.form.submit()">
+    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+        <select name="status" class="form-input" style="width: 170px;" onchange="this.form.submit()">
             <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Todos los estados</option>
             <option value="incomplete" {% if status_filter == 'incomplete' %}selected{% endif %}>Incompletos (Pendientes)</option>
             <option value="complete" {% if status_filter == 'complete' %}selected{% endif %}>Completos</option>
+            <option value="ai_processed" {% if status_filter == 'ai_processed' %}selected{% endif %}>Evaluados por IA</option>
         </select>
-        {% if query or status_filter != 'all' or clase_filter %}
-            <a href="{% url 'taxonomy:sku_list' %}" class="btn btn-secondary">Limpiar</a>
+
+        {% if query or status_filter != 'all' or missing_filter %}
+            <a href="{% url 'taxonomy:sku_list' %}" class="btn btn-secondary">Limpiar Filtros</a>
         {% endif %}
+
+        <!-- Botones Exportar Informe Excel para TI -->
+        <a href="{% url 'taxonomy:export_ti_excel' %}?scope=ai_processed" class="btn btn-export" title="Descargar informe Excel con los SKUs modificados/evaluados por la IA para el equipo de TI">
+            📥 Exportar Informe TI (Modificados IA)
+        </a>
+        <a href="{% url 'taxonomy:export_ti_excel' %}?scope=all" class="btn btn-secondary" title="Descargar catálogo completo en Excel">
+            📊 Exportar Catálogo Completo
+        </a>
     </div>
 </form>
+
+{% if missing_filter %}
+    <div style="margin-bottom: 1rem; color: var(--accent-amber); font-weight: 500; font-size: 0.9rem;">
+        🔍 Filtrando SKUs pendientes por el campo: <strong>{{ missing_filter|upper }}</strong>
+    </div>
+{% endif %}
 
 <!-- Data Table -->
 <div class="table-container">
@@ -143,7 +191,7 @@
                 <th>Familia</th>
                 <th>SubFamilia</th>
                 <th>Categoría</th>
-                <th>Estado Taxonómico</th>
+                <th>Estado Auditado</th>
                 <th>Acciones IA</th>
             </tr>
         </thead>
@@ -163,9 +211,9 @@
                     {% else %}
                         <span class="badge badge-success">Completo</span>
                     {% endif %}
-                    {% if sku.ai_confidence_score %}
+                    {% if sku.ai_processed %}
                         <div style="font-size: 0.7rem; color: var(--accent-emerald); margin-top: 0.2rem;">
-                            Confianza IA: {{ sku.ai_confidence_score|stringformat:".2f" }}
+                            ✨ Evaluado por IA (Confianza: {{ sku.ai_confidence_score|stringformat:".2f" }})
                         </div>
                     {% endif %}
                 </td>
@@ -175,7 +223,7 @@
                             ✨ Clasificar IA
                         </button>
                     {% else %}
-                        <button onclick="triggerAiSingle({{ sku.pk }})" class="btn btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;">
+                        <button id="ai-btn-{{ sku.pk }}" onclick="triggerAiSingle({{ sku.pk }})" class="btn btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;">
                             🔄 Re-evaluar
                         </button>
                     {% endif %}
@@ -184,7 +232,7 @@
             {% empty %}
             <tr>
                 <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">
-                    No se encontraron registros que coincidan con la búsqueda.
+                    No se encontraron registros que coincidan con el filtro seleccionado.
                 </td>
             </tr>
             {% endfor %}
@@ -198,10 +246,10 @@
         </span>
         <div style="display: flex; gap: 0.5rem;">
             {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}&q={{ query }}&status={{ status_filter }}" class="btn btn-secondary">Anterior</a>
+                <a href="?page={{ page_obj.previous_page_number }}&q={{ query }}&status={{ status_filter }}&missing={{ missing_filter }}" class="btn btn-secondary">Anterior</a>
             {% endif %}
             {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}" class="btn btn-secondary">Siguiente</a>
+                <a href="?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}&missing={{ missing_filter }}" class="btn btn-secondary">Siguiente</a>
             {% endif %}
         </div>
     </div>
@@ -248,13 +296,8 @@
                 if (data.categoria) document.getElementById(`sku-categoria-${pk}`).innerText = data.categoria;
 
                 const statusTd = document.getElementById(`sku-status-${pk}`);
-                if (!data.is_incomplete) {
-                    statusTd.innerHTML = `<span class="badge badge-success">Completo</span>
-                        <div style="font-size: 0.7rem; color: var(--accent-emerald); margin-top: 0.2rem;">Confianza IA: ${data.confidence.toFixed(2)}</div>`;
-                } else {
-                    statusTd.innerHTML = `<span class="badge badge-warning">Incompleto</span>
-                        <div style="font-size: 0.7rem; color: var(--accent-emerald); margin-top: 0.2rem;">Confianza IA: ${data.confidence.toFixed(2)}</div>`;
-                }
+                statusTd.innerHTML = `<span class="badge badge-success">Completo</span>
+                    <div style="font-size: 0.7rem; color: var(--accent-emerald); margin-top: 0.2rem;">✨ Evaluado por IA (Confianza: ${data.confidence.toFixed(2)})</div>`;
 
                 if (btn) {
                     btn.disabled = false;

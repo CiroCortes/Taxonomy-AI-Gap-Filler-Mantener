@@ -68,6 +68,9 @@ class Command(BaseCommand):
 
                 sku.ai_confidence_score = result.confidence
                 sku.ai_rationale = result.rationale
+                sku.ai_processed = True
+                from django.utils import timezone
+                sku.ai_processed_at = timezone.now()
                 sku.check_incomplete()
                 sku.save()
 

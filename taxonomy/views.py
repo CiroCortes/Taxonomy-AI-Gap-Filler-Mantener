@@ -1,11 +1,15 @@
 import json
-from django.shortcuts import render, get_object_or_404, redirect
+import os
+from decimal import Decimal
+from django.shortcuts import render, get_object_or_404
 from django.core.paginator import Paginator
-from django.http import JsonResponse
-from django.db.models import Q, Count
+from django.http import JsonResponse, HttpResponse
+from django.db.models import Q
+from django.utils import timezone
 from taxonomy.models import SKUItem
 from ai_engine.gap_classifier import GeminiGapClassifier
-import os
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,9 +18,9 @@ load_dotenv()
 def sku_list_view(request):
     """Vista principal del Dashboard del Maestro de Artículos PESCO."""
     query = request.GET.get('q', '').strip()
-    status_filter = request.GET.get('status', 'all')  # all, incomplete, complete
+    status_filter = request.GET.get('status', 'all')  # all, incomplete, complete, ai_processed
+    missing_filter = request.GET.get('missing', '').strip()  # clase, familia, subfamilia, categoria
     clase_filter = request.GET.get('clase', '')
-    familia_filter = request.GET.get('familia', '')
 
     skus = SKUItem.objects.all().order_by('item_code')
 
@@ -27,19 +31,30 @@ def sku_list_view(request):
         skus = skus.filter(is_incomplete=True)
     elif status_filter == 'complete':
         skus = skus.filter(is_incomplete=False)
+    elif status_filter == 'ai_processed':
+        skus = skus.filter(ai_processed=True)
+
+    # Filtrar por campo específico pendiente
+    if missing_filter == 'clase':
+        skus = skus.filter(Q(clase__isnull=True) | Q(clase=''))
+    elif missing_filter == 'familia':
+        skus = skus.filter(Q(familia__isnull=True) | Q(familia=''))
+    elif missing_filter == 'subfamilia':
+        skus = skus.filter(Q(subfamilia__isnull=True) | Q(subfamilia=''))
+    elif missing_filter == 'categoria':
+        skus = skus.filter(Q(categoria__isnull=True) | Q(categoria=''))
 
     if clase_filter:
         skus = skus.filter(clase=clase_filter)
 
-    if familia_filter:
-        skus = skus.filter(familia=familia_filter)
-
-    # MÃ©tricas KPI para el Dashboard
+    # Métricas KPI para el Dashboard
     total_count = SKUItem.objects.count()
     sin_clase_count = SKUItem.objects.filter(Q(clase__isnull=True) | Q(clase='')).count()
     sin_familia_count = SKUItem.objects.filter(Q(familia__isnull=True) | Q(familia='')).count()
     sin_subfamilia_count = SKUItem.objects.filter(Q(subfamilia__isnull=True) | Q(subfamilia='')).count()
+    sin_categoria_count = SKUItem.objects.filter(Q(categoria__isnull=True) | Q(categoria='')).count()
     incomplete_total = SKUItem.objects.filter(is_incomplete=True).count()
+    ai_processed_count = SKUItem.objects.filter(ai_processed=True).count()
 
     paginator = Paginator(skus, 25)
     page_number = request.GET.get('page', 1)
@@ -49,28 +64,29 @@ def sku_list_view(request):
         'page_obj': page_obj,
         'query': query,
         'status_filter': status_filter,
+        'missing_filter': missing_filter,
         'clase_filter': clase_filter,
-        'familia_filter': familia_filter,
         'total_count': total_count,
         'sin_clase_count': sin_clase_count,
         'sin_familia_count': sin_familia_count,
         'sin_subfamilia_count': sin_subfamilia_count,
+        'sin_categoria_count': sin_categoria_count,
         'incomplete_total': incomplete_total,
-        'clases_list': SKUItem.objects.exclude(clase__isnull=True).exclude(clase='').values_list('clase', flat=True).distinct()[:30],
+        'ai_processed_count': ai_processed_count,
     }
     return render(request, 'taxonomy/sku_list.html', context)
 
 
 def process_single_sku_ai(request, pk):
-    """Vista AJAX para procesar la IA en un Ãºnico SKU."""
+    """Vista AJAX para procesar la IA en un único SKU."""
     if request.method != 'POST':
-        return JsonResponse({'error': 'MÃ©todo no permitido'}, status=405)
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
 
     sku = get_object_or_404(SKUItem, pk=pk)
     api_key = os.getenv('GEMINI_API_KEY')
 
     if not api_key:
-        return JsonResponse({'success': False, 'error': 'No se configurÃ³ la GEMINI_API_KEY en .env'}, status=400)
+        return JsonResponse({'success': False, 'error': 'No se configuró la GEMINI_API_KEY en .env'}, status=400)
 
     try:
         classifier = GeminiGapClassifier(api_key=api_key)
@@ -105,6 +121,8 @@ def process_single_sku_ai(request, pk):
 
         sku.ai_confidence_score = result.confidence
         sku.ai_rationale = result.rationale
+        sku.ai_processed = True
+        sku.ai_processed_at = timezone.now()
         sku.check_incomplete()
         sku.save()
 
@@ -121,3 +139,78 @@ def process_single_sku_ai(request, pk):
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def export_ti_excel_view(request):
+    """Genera un archivo Excel profesional de auditoría e informe para el equipo de TI."""
+    export_scope = request.GET.get('scope', 'ai_processed')  # ai_processed, all, incomplete
+
+    if export_scope == 'ai_processed':
+        skus = SKUItem.objects.filter(ai_processed=True).order_by('item_code')
+    elif export_scope == 'incomplete':
+        skus = SKUItem.objects.filter(is_incomplete=True).order_by('item_code')
+    else:
+        skus = SKUItem.objects.all().order_by('item_code')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Informe TI - Taxonomía IA"
+
+    # Estilos de Excel
+    header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid')
+    data_font = Font(name='Calibri', size=10)
+    thin_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='thin', color='D9D9D9')
+    )
+
+    headers = [
+        'ItemCode (SAP)', 'ItemName (Descripción)', 'Nombre Grupo',
+        'Clase', 'Familia', 'SubFamilia', 'Modelo', 'Categoría',
+        'Confianza IA (%)', 'Razonamiento Técnico IA', 'Evaluado por IA', 'Fecha Procesamiento'
+    ]
+
+    ws.append(headers)
+
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+
+    for sku in skus:
+        proc_date = sku.ai_processed_at.strftime('%Y-%m-%d %H:%M:%S') if sku.ai_processed_at else 'N/A'
+        conf_pct = f"{int(sku.ai_confidence_score * 100)}%" if sku.ai_confidence_score else 'N/A'
+        
+        row_data = [
+            sku.item_code,
+            sku.item_name,
+            sku.nombre_grupo or '',
+            sku.clase or '',
+            sku.familia or '',
+            sku.subfamilia or '',
+            sku.modelo or '',
+            sku.categoria or '',
+            conf_pct,
+            sku.ai_rationale or '',
+            'SI' if sku.ai_processed else 'NO',
+            proc_date
+        ]
+        ws.append(row_data)
+
+    # Ajustar ancho de columnas automáticamente
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = openpyxl.utils.get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 60)
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    filename = f"PESCO_Informe_Taxonomia_TI_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    wb.save(response)
+    return response

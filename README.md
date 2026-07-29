@@ -5,7 +5,7 @@
 [![FastMCP](https://img.shields.io/badge/FastMCP-Auditor-000000?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Pytest](https://img.shields.io/badge/Pytest-Passed-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://docs.pytest.org/)
 
-Sistema de resoluciÃ³n incremental de brechas taxonÃ³micas (**Gap-Filling**) y catalogaciÃ³n inteligente para el **Maestro de ArtÃ­culos de PESCO S.A.** extraÃ­do desde SAP ERP ERP (20.297 SKUs), basado en **Spec-Driven Development (SDD)**.
+Sistema de resolucion incremental de brechas taxonomicas (**Gap-Filling**) y catalogacion inteligente para el **Maestro de Articulos de PESCO S.A.** extraido desde SAP ERP ERP (20.297 SKUs), basado en **Spec-Driven Development (SDD)**.
 
 ---
 
@@ -53,7 +53,7 @@ mantenedor_maestro/
 
 ---
 
-## 🚀 GuÃ­a de InstalaciÃ³n y EjecuciÃ³n
+## 🚀 Guía de Instalación y Ejecución
 
 ### 1. Clonar el Repositorio e Instalar Entorno
 ```powershell
@@ -75,7 +75,7 @@ En el archivo `.env`:
 GEMINI_API_KEY=tu_api_key_de_gemini
 ```
 
-### 3. Migraciones e ImportaciÃ³n Masiva del Maestro SAP
+### 3. Migraciones e Importacion Masiva del Maestro SAP
 ```powershell
 python manage.py migrate
 python manage.py load_sap_excel --file "2907 - 00.- Maestro Articulos v7.xlsx"
@@ -93,7 +93,7 @@ Ingresa a [http://127.0.0.1:8000/](http://127.0.0.1:8000/) en tu navegador.
 python manage.py process_pending_skus --limit 50
 ```
 
-### 6. AuditorÃ­a en Tiempo Real (FastMCP)
+### 6. Auditoría en Tiempo Real (FastMCP)
 ```powershell
 python -c "from mcp_server.pesco_mcp import get_pending_summary; print(get_pending_summary())"
 ```

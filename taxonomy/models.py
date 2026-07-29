@@ -21,16 +21,22 @@ class SKUItem(models.Model):
     # Auditoría e IA
     is_incomplete = models.BooleanField(default=True, db_index=True)
     pending_fields = models.JSONField(default=list)
+    ai_processed = models.BooleanField(default=False, db_index=True)
+    ai_processed_at = models.DateTimeField(null=True, blank=True)
     ai_confidence_score = models.FloatField(default=0.0)
     ai_rationale = models.TextField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def check_incomplete(self):
         missing = []
-        if not self.clase: missing.append("clase")
-        if not self.familia: missing.append("familia")
-        if not self.subfamilia: missing.append("subfamilia")
-        if not self.categoria: missing.append("categoria")
+        if not self.clase or not str(self.clase).strip():
+            missing.append("clase")
+        if not self.familia or not str(self.familia).strip():
+            missing.append("familia")
+        if not self.subfamilia or not str(self.subfamilia).strip():
+            missing.append("subfamilia")
+        if not self.categoria or not str(self.categoria).strip():
+            missing.append("categoria")
         self.pending_fields = missing
         self.is_incomplete = len(missing) > 0
         return self.is_incomplete
