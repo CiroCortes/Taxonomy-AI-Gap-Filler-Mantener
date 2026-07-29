@@ -4,6 +4,74 @@
 
 {% block extra_css %}
 <style>
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    @media (min-width: 1200px) {
+        .kpi-grid {
+            grid-template-columns: repeat(6, 1fr);
+        }
+    }
+
+    .kpi-link {
+        text-decoration: none;
+        color: inherit;
+        display: flex;
+        height: 100%;
+    }
+
+    .kpi-card {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        padding: 1.15rem 1rem;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-sizing: border-box;
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--accent-blue);
+    }
+
+    .kpi-card.active {
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 14px rgba(56, 189, 248, 0.3);
+        background-color: var(--bg-card-hover);
+    }
+
+    .kpi-title {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        min-height: 2.4rem;
+        display: flex;
+        align-items: flex-start;
+        line-height: 1.2;
+    }
+
+    .kpi-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-top: 0.5rem;
+        line-height: 1;
+    }
+
+    .kpi-value.blue { color: var(--accent-blue); }
+    .kpi-value.amber { color: var(--accent-amber); }
+    .kpi-value.rose { color: var(--accent-rose); }
+    .kpi-value.emerald { color: var(--accent-emerald); }
+
     .filter-bar {
         background-color: var(--bg-card);
         border: 1px solid var(--border-color);
@@ -36,18 +104,6 @@
 
     .form-input:focus {
         border-color: var(--accent-blue);
-    }
-
-    .kpi-link {
-        text-decoration: none;
-        color: inherit;
-        display: block;
-    }
-
-    .kpi-card.active {
-        border-color: var(--accent-blue);
-        box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
-        background-color: var(--bg-card-hover);
     }
 
     .table-container {
@@ -104,8 +160,8 @@
 {% endblock %}
 
 {% block content %}
-<!-- KPI Summary Cards Clickeables -->
-<div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+<!-- KPI Summary Cards Clickeables Uniformes -->
+<div class="kpi-grid">
     <a href="{% url 'taxonomy:sku_list' %}" class="kpi-link">
         <div class="kpi-card {% if not missing_filter and status_filter == 'all' %}active{% endif %}">
             <div class="kpi-title">Total SKUs SAP</div>
