@@ -20,7 +20,12 @@ def sku_list_view(request):
     query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', 'all')  # all, incomplete, complete, ai_processed
     missing_filter = request.GET.get('missing', '').strip()  # clase, familia, subfamilia, categoria
-    clase_filter = request.GET.get('clase', '')
+
+    # Filtros de taxonomía
+    clase_filter = request.GET.get('clase', '').strip()
+    familia_filter = request.GET.get('familia', '').strip()
+    subfamilia_filter = request.GET.get('subfamilia', '').strip()
+    categoria_filter = request.GET.get('categoria', '').strip()
 
     skus = SKUItem.objects.all().order_by('item_code')
 
@@ -44,8 +49,15 @@ def sku_list_view(request):
     elif missing_filter == 'categoria':
         skus = skus.filter(Q(categoria__isnull=True) | Q(categoria=''))
 
+    # Filtros por valor de atributo
     if clase_filter:
         skus = skus.filter(clase=clase_filter)
+    if familia_filter:
+        skus = skus.filter(familia=familia_filter)
+    if subfamilia_filter:
+        skus = skus.filter(subfamilia=subfamilia_filter)
+    if categoria_filter:
+        skus = skus.filter(categoria=categoria_filter)
 
     # Métricas KPI para el Dashboard
     total_count = SKUItem.objects.count()
@@ -55,6 +67,12 @@ def sku_list_view(request):
     sin_categoria_count = SKUItem.objects.filter(Q(categoria__isnull=True) | Q(categoria='')).count()
     incomplete_total = SKUItem.objects.filter(is_incomplete=True).count()
     ai_processed_count = SKUItem.objects.filter(ai_processed=True).count()
+
+    # Listas distintivas para los menús desplegables de filtro
+    clases_list = SKUItem.objects.exclude(clase__isnull=True).exclude(clase='').values_list('clase', flat=True).distinct().order_by('clase')
+    familias_list = SKUItem.objects.exclude(familia__isnull=True).exclude(familia='').values_list('familia', flat=True).distinct().order_by('familia')
+    subfamilias_list = SKUItem.objects.exclude(subfamilia__isnull=True).exclude(subfamilia='').values_list('subfamilia', flat=True).distinct().order_by('subfamilia')
+    categorias_list = SKUItem.objects.exclude(categoria__isnull=True).exclude(categoria='').values_list('categoria', flat=True).distinct().order_by('categoria')
 
     paginator = Paginator(skus, 25)
     page_number = request.GET.get('page', 1)
@@ -66,6 +84,9 @@ def sku_list_view(request):
         'status_filter': status_filter,
         'missing_filter': missing_filter,
         'clase_filter': clase_filter,
+        'familia_filter': familia_filter,
+        'subfamilia_filter': subfamilia_filter,
+        'categoria_filter': categoria_filter,
         'total_count': total_count,
         'sin_clase_count': sin_clase_count,
         'sin_familia_count': sin_familia_count,
@@ -73,6 +94,10 @@ def sku_list_view(request):
         'sin_categoria_count': sin_categoria_count,
         'incomplete_total': incomplete_total,
         'ai_processed_count': ai_processed_count,
+        'clases_list': clases_list,
+        'familias_list': familias_list,
+        'subfamilias_list': subfamilias_list,
+        'categorias_list': categorias_list,
     }
     return render(request, 'taxonomy/sku_list.html', context)
 
@@ -159,7 +184,6 @@ def export_ti_excel_view(request):
     # Estilos de Excel
     header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
     header_fill = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid')
-    data_font = Font(name='Calibri', size=10)
     thin_border = Border(
         left=Side(style='thin', color='D9D9D9'),
         right=Side(style='thin', color='D9D9D9'),
@@ -169,7 +193,7 @@ def export_ti_excel_view(request):
 
     headers = [
         'ItemCode (SAP)', 'ItemName (Descripción)', 'Nombre Grupo',
-        'Clase', 'Familia', 'SubFamilia', 'Modelo', 'Categoría',
+        'Clase', 'Familia', 'SubFamilia (Marca)', 'Modelo', 'Categoría',
         'Confianza IA (%)', 'Razonamiento Técnico IA', 'Evaluado por IA', 'Fecha Procesamiento'
     ]
 
