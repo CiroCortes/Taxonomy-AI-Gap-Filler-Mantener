@@ -121,7 +121,7 @@ def upload_sap_excel_view(request):
         return JsonResponse({'error': 'Método no permitido'}, status=405)
 
     if 'excel_file' not in request.FILES:
-        return JsonResponse({'success': False, 'error': 'No se adjunto ningún archivo Excel.'}, status=400)
+        return JsonResponse({'success': False, 'error': 'No se adjuntó ningún archivo Excel.'}, status=400)
 
     excel_file = request.FILES['excel_file']
     if not excel_file.name.endswith(('.xlsx', '.xls')):
@@ -255,10 +255,10 @@ def process_single_sku_ai(request, pk):
         return JsonResponse({'error': 'Método no permitido'}, status=405)
 
     sku = get_object_or_404(SKUItem, pk=pk)
-    api_key = os.getenv('GEMINI_API_KEY')
+    api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
 
-    if not api_key:
-        return JsonResponse({'success': False, 'error': 'No se configuró la GEMINI_API_KEY en .env'}, status=400)
+    if not api_key or not api_key.strip():
+        return JsonResponse({'success': False, 'error': 'No se encontró la clave GEMINI_API_KEY en tu archivo .env. Agrega GEMINI_API_KEY=tu_clave en el archivo .env'}, status=400)
 
     try:
         classifier = GeminiGapClassifier(api_key=api_key)

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class DynamicTaxonomyFill(BaseModel):
-    clase: Optional[str] = Field(None, description="Clase asignada elegida strictly del catálogo oficial de SAP PESCO")
+    clase: Optional[str] = Field(None, description="Clase asignada elegida estrictamente del catálogo oficial de SAP PESCO")
     familia: Optional[str] = Field(None, description="Familia asignada elegida estrictamente del catálogo oficial de SAP PESCO")
     subfamilia: Optional[str] = Field(None, description="Subfamilia/Marca asignada")
     categoria: Optional[str] = Field(None, description="Categoría operacional")
@@ -15,21 +15,24 @@ class DynamicTaxonomyFill(BaseModel):
 
 class GeminiGapClassifier:
     def __init__(self, api_key: str):
-        self.api_key = api_key
-        os.environ["GEMINI_API_KEY"] = api_key
-        os.environ["GOOGLE_API_KEY"] = api_key
+        if not api_key or not isinstance(api_key, str) or not api_key.strip():
+            raise ValueError("No se proporcionó una GEMINI_API_KEY válida. Por favor configúrala en tu archivo .env.")
+
+        self.api_key = api_key.strip()
+        os.environ["GEMINI_API_KEY"] = self.api_key
+        os.environ["GOOGLE_API_KEY"] = self.api_key
 
         self.use_google_genai = False
         self.use_google_generativeai = False
 
         try:
             from google import genai
-            self.client = genai.Client(api_key=api_key)
+            self.client = genai.Client(api_key=self.api_key)
             self.use_google_genai = True
         except (ImportError, Exception):
             try:
                 import google.generativeai as genai_legacy
-                genai_legacy.configure(api_key=api_key)
+                genai_legacy.configure(api_key=self.api_key)
                 self.legacy_model = genai_legacy.GenerativeModel(
                     model_name="gemini-2.5-flash",
                     generation_config={"response_mime_type": "application/json", "temperature": 0.0}
