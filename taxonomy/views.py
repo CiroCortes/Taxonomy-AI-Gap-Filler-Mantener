@@ -362,42 +362,81 @@ def update_sku_taxonomy(request, pk):
 
 
 def export_ti_excel_view(request):
-    """Genera un archivo Excel profesional de auditoría e informe para el equipo de TI."""
-    export_scope = request.GET.get('scope', 'ai_processed')  # ai_processed, all, incomplete
+    """Genera un archivo Excel profesional multi-pestaña para el equipo de TI (Formato Carga Masiva SAP DTW + Auditoría de Cambios)."""
+    export_scope = request.GET.get('scope', 'ai_processed')  # ai_processed, all, incomplete, group
+    grupo_filter = request.GET.get('grupo', '').strip()
+
+    skus = SKUItem.objects.all().order_by('item_code')
+
+    if grupo_filter:
+        skus = skus.filter(nombre_grupo=grupo_filter)
 
     if export_scope == 'ai_processed':
-        skus = SKUItem.objects.filter(ai_processed=True).order_by('item_code')
+        skus = skus.filter(ai_processed=True)
     elif export_scope == 'incomplete':
-        skus = SKUItem.objects.filter(is_incomplete=True).order_by('item_code')
-    else:
-        skus = SKUItem.objects.all().order_by('item_code')
+        skus = skus.filter(is_incomplete=True)
 
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Informe TI - Taxonomía IA"
 
-    # Estilos de Excel
+    # --- PESTAÑA 1: Carga Masiva SAP DTW ---
+    ws1 = wb.active
+    ws1.title = "Carga Masiva SAP DTW"
+
     header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
-    header_fill = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid')
+    header_fill_blue = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid')
 
-    headers = [
-        'ItemCode (SAP)', 'ItemName (Descripción)', 'Nombre Grupo',
-        'Clase', 'Familia', 'SubFamilia (Marca)', 'Modelo', 'Categoría',
-        'Confianza IA (%)', 'Razonamiento Técnico IA', 'Evaluado por IA', 'Fecha Procesamiento'
+    headers1 = [
+        'ItemCode (SKU Clave SAP)', 'ItemName (Descripción)', 'Nombre Grupo',
+        'Clase (U_Clase)', 'Familia (U_Familia)', 'SubFamilia (U_Marca)',
+        'Modelo (U_Modelo)', 'Categoría (U_Categoria)', 'Estado Taxonomía', 'Acción Recomendada TI'
     ]
 
-    ws.append(headers)
-
-    for cell in ws[1]:
+    ws1.append(headers1)
+    for cell in ws1[1]:
         cell.font = header_font
-        cell.fill = header_fill
+        cell.fill = header_fill_blue
         cell.alignment = Alignment(horizontal='center', vertical='center')
 
     for sku in skus:
+        action = "UPDATE OITM" if not sku.is_incomplete else "PENDIENTE COMPLETAR"
+        ws1.append([
+            sku.item_code,
+            sku.item_name,
+            sku.nombre_grupo or '',
+            sku.clase or '',
+            sku.familia or '',
+            sku.subfamilia or '',
+            sku.modelo or '',
+            sku.categoria or '',
+            'COMPLETO' if not sku.is_incomplete else 'INCOMPLETO',
+            action
+        ])
+
+    for col in ws1.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = openpyxl.utils.get_column_letter(col[0].column)
+        ws1.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 55)
+
+    # --- PESTAÑA 2: Auditoría Detallada IA / Usuario ---
+    ws2 = wb.create_sheet(title="Auditoría de Evaluaciones IA")
+    headers2 = [
+        'ItemCode', 'ItemName', 'Grupo SAP', 'Clase', 'Familia',
+        'SubFamilia (Marca)', 'Modelo', 'Categoría',
+        'Confianza IA (%)', 'Razonamiento Técnico IA', 'Fecha Evaluación'
+    ]
+    ws2.append(headers2)
+
+    header_fill_dark = PatternFill(start_color='0F172A', end_color='0F172A', fill_type='solid')
+    for cell in ws2[1]:
+        cell.font = header_font
+        cell.fill = header_fill_dark
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+
+    ai_skus = skus.filter(ai_processed=True)
+    for sku in ai_skus:
         proc_date = sku.ai_processed_at.strftime('%Y-%m-%d %H:%M:%S') if sku.ai_processed_at else 'N/A'
         conf_pct = f"{int(sku.ai_confidence_score * 100)}%" if sku.ai_confidence_score else 'N/A'
-        
-        row_data = [
+        ws2.append([
             sku.item_code,
             sku.item_name,
             sku.nombre_grupo or '',
@@ -408,21 +447,31 @@ def export_ti_excel_view(request):
             sku.categoria or '',
             conf_pct,
             sku.ai_rationale or '',
-            'SI' if sku.ai_processed else 'NO',
             proc_date
-        ]
-        ws.append(row_data)
+        ])
 
-    # Ajustar ancho de columnas automáticamente
-    for col in ws.columns:
+    for col in ws2.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = openpyxl.utils.get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 60)
+        ws2.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 60)
+
+    # --- PESTAÑA 3: Instrucciones de Carga TI ---
+    ws3 = wb.create_sheet(title="Instrucciones Equipo TI")
+    ws3.append(["INSTRUCCIONES PARA EL EQUIPO DE TI - ACTUALIZACIÓN MASIVA EN SAP ERP"])
+    ws3.append([])
+    ws3.append(["1. La pestaña 'Carga Masiva SAP DTW' contiene los códigos SKU con sus atributos taxonómicos finalizados."])
+    ws3.append(["2. Los campos corresponden a las tablas estándar de SAP ERP: U_Clase, U_Familia, U_Marca, U_Modelo, U_Categoria."])
+    ws3.append(["3. Para ejecutar la carga masiva mediante Data Transfer Workbench (DTW) o SQL Update:"])
+    ws3.append(["   UPDATE OITM SET U_Clase = T.Clase, U_Familia = T.Familia, U_Marca = T.SubFamilia, U_Categoria = T.Categoria FROM OITM INNER JOIN TempTable T ON OITM.ItemCode = T.ItemCode"])
+    ws3.append(["4. La pestaña 'Auditoría de Evaluaciones IA' contiene la trazabilidad y justificación técnica de cada asignación."])
+
+    ws3['A1'].font = Font(name='Calibri', size=13, bold=True, color='1F4E78')
 
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-    filename = f"PESCO_Informe_Taxonomia_TI_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    group_str = f"_{grupo_filter.replace(' ', '_')}" if grupo_filter else ""
+    filename = f"PESCO_Carga_Masiva_TI_SAP{group_str}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
     wb.save(response)

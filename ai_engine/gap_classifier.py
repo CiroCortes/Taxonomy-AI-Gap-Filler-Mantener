@@ -34,7 +34,7 @@ class GeminiGapClassifier:
                 import google.generativeai as genai_legacy
                 genai_legacy.configure(api_key=self.api_key)
                 self.legacy_model = genai_legacy.GenerativeModel(
-                    model_name="gemini-2.5-flash",
+                    model_name="gemini-3.6-flash",
                     generation_config={"response_mime_type": "application/json", "temperature": 0.0}
                 )
                 self.use_google_generativeai = True
@@ -93,7 +93,7 @@ Responde siguiendo la estructura JSON:
 '''
 
         if self.use_google_genai:
-            for model_name in ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash-latest']:
+            for model_name in ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.0-flash', 'gemini-3.5-flash-lite']:
                 try:
                     response = self.client.models.generate_content(
                         model=model_name,
@@ -111,7 +111,7 @@ Responde siguiendo la estructura JSON:
                 import google.generativeai as genai_legacy
                 genai_legacy.configure(api_key=self.api_key)
                 m = genai_legacy.GenerativeModel(
-                    model_name="gemini-1.5-flash",
+                    model_name="gemini-3.6-flash",
                     generation_config={"response_mime_type": "application/json", "temperature": 0.0}
                 )
                 res = m.generate_content(prompt)

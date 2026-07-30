@@ -292,9 +292,9 @@
                 📤 Cargar Maestro SAP (.xlsx)
             </button>
 
-            <!-- Botones Exportar Informe Excel para TI -->
-            <a href="{% url 'taxonomy:export_ti_excel' %}?scope=ai_processed" class="btn btn-export" title="Descargar informe Excel con los SKUs modificados/evaluados por la IA para el equipo de TI">
-                📥 Exportar Informe TI
+            <!-- Botones Exportar Informe Excel para TI (Formato Carga SAP DTW Multi-Pestaña) -->
+            <a href="{% url 'taxonomy:export_ti_excel' %}?scope=ai_processed{% if grupo_filter %}&grupo={{ grupo_filter|urlencode }}{% endif %}" class="btn btn-export" title="Descargar archivo Excel con formato de Carga Masiva SAP (DTW) e instrucciones para TI">
+                📥 Exportar Carga SAP TI (DTW)
             </a>
         </div>
     </div>
@@ -613,8 +613,8 @@
             }
         })
         .catch(err => {
-            progress.style.display = 'none';
             alert("Error de conexión: " + err);
+            progress.style.display = 'none';
             btn.disabled = false;
         });
     }
