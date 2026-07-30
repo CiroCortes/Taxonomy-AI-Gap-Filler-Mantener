@@ -155,15 +155,19 @@
         border-top: 1px solid var(--border-color);
     }
 
+    .btn-upload {
+        background: linear-gradient(135deg, #0284c7, #0369a1);
+        color: white;
+    }
+    .btn-upload:hover { opacity: 0.9; }
+
     .btn-export {
         background: linear-gradient(135deg, #10b981, #059669);
         color: white;
     }
-    .btn-export:hover {
-        opacity: 0.9;
-    }
+    .btn-export:hover { opacity: 0.9; }
 
-    /* Estilos Modal de Edición Manual */
+    /* Modales */
     .modal-backdrop {
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
@@ -203,6 +207,19 @@
         gap: 0.75rem;
         border-top: 1px solid var(--border-color);
         padding-top: 1rem;
+    }
+
+    .dropzone {
+        border: 2px dashed var(--accent-blue);
+        border-radius: 0.5rem;
+        padding: 2rem;
+        text-align: center;
+        background-color: rgba(56, 189, 248, 0.05);
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+    .dropzone:hover {
+        background-color: rgba(56, 189, 248, 0.1);
     }
 </style>
 {% endblock %}
@@ -248,34 +265,36 @@
     </a>
 </div>
 
-<!-- Filter & Export Bar Avanzada -->
+<!-- Filter & Export/Upload Bar Avanzada -->
 <form method="GET" action="{% url 'taxonomy:sku_list' %}" class="filter-bar">
-    <!-- Fila 1: Búsqueda, Estado y Botón Limpiar Filtros -->
+    <!-- Fila 1: Búsqueda, Estado, Cargar Excel y Exportar -->
     <div class="filter-row">
         <div class="search-box">
             <input type="text" name="q" value="{{ query }}" placeholder="Buscar por código SKU, descripción, grupo o modelo..." class="form-input" style="width: 100%;">
             <button type="submit" class="btn btn-primary">Buscar</button>
         </div>
 
-        <div style="display: flex; gap: 0.75rem; align-items: center;">
-            <select name="status" class="form-input" style="min-width: 170px;" onchange="this.form.submit()">
+        <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+            <select name="status" class="form-input" style="min-width: 160px;" onchange="this.form.submit()">
                 <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Todos los estados</option>
                 <option value="incomplete" {% if status_filter == 'incomplete' %}selected{% endif %}>Incompletos (Pendientes)</option>
                 <option value="complete" {% if status_filter == 'complete' %}selected{% endif %}>Completos</option>
                 <option value="ai_processed" {% if status_filter == 'ai_processed' %}selected{% endif %}>Evaluados por IA</option>
             </select>
 
-            <!-- Botón Limpiar Filtros (Siempre Visible) -->
+            <!-- Botón Limpiar Filtros -->
             <a href="{% url 'taxonomy:sku_list' %}" class="btn btn-secondary" style="white-space: nowrap;">
                 🧹 Limpiar Filtros
             </a>
 
+            <!-- Botón Cargar Archivo Excel SAP -->
+            <button type="button" onclick="openUploadModal()" class="btn btn-upload" style="white-space: nowrap;" title="Cargar o actualizar el Maestro de Artículos desde un archivo Excel (.xlsx)">
+                📤 Cargar Maestro SAP (.xlsx)
+            </button>
+
             <!-- Botones Exportar Informe Excel para TI -->
             <a href="{% url 'taxonomy:export_ti_excel' %}?scope=ai_processed" class="btn btn-export" title="Descargar informe Excel con los SKUs modificados/evaluados por la IA para el equipo de TI">
-                📥 Exportar Informe TI (Modificados IA)
-            </a>
-            <a href="{% url 'taxonomy:export_ti_excel' %}?scope=all" class="btn btn-secondary" title="Descargar catálogo completo en Excel">
-                📊 Exportar Catálogo Completo
+                📥 Exportar Informe TI
             </a>
         </div>
     </div>
@@ -425,6 +444,39 @@
     </div>
 </div>
 
+<!-- Modal para Cargar Archivo Excel SAP -->
+<div id="uploadModal" class="modal-backdrop">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">📤 Cargar Maestro de Artículos SAP</h3>
+            <button type="button" onclick="closeUploadModal()" class="btn btn-secondary" style="padding: 0.2rem 0.5rem;">✕</button>
+        </div>
+        <div class="modal-body">
+            <div style="font-size: 0.85rem; color: var(--text-muted);">
+                Selecciona o arrastra el archivo Excel (<code>.xlsx</code>) actualizado desde SAP ERP. El sistema creará nuevos SKUs y actualizará los existentes automáticamente.
+            </div>
+            
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="dropzone" onclick="document.getElementById('excelFileInput').click()">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+                    <div id="fileNameDisplay" style="font-size: 0.9rem; font-weight: 600; color: var(--accent-blue);">
+                        Haz clic aquí para seleccionar el archivo Excel (.xlsx)
+                    </div>
+                    <input type="file" id="excelFileInput" name="excel_file" accept=".xlsx, .xls" style="display: none;" onchange="handleFileSelected(this)">
+                </div>
+            </form>
+
+            <div id="uploadProgress" style="display: none; text-align: center; color: var(--accent-blue); font-weight: 600; margin-top: 0.5rem;">
+                ⏳ Procesando y actualizando base de datos SAP... Por favor espera unos segundos.
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" onclick="closeUploadModal()" class="btn btn-secondary">Cancelar</button>
+            <button type="button" id="submitUploadBtn" onclick="submitExcelUpload()" class="btn btn-primary" disabled>📤 Subir y Actualizar</button>
+        </div>
+    </div>
+</div>
+
 <!-- Modal para Edición Manual de Taxonomía -->
 <div id="editModal" class="modal-backdrop">
     <div class="modal-content">
@@ -511,6 +563,60 @@
             }
         }
         return cookieValue;
+    }
+
+    function openUploadModal() {
+        document.getElementById('uploadModal').classList.add('open');
+    }
+    function closeUploadModal() {
+        document.getElementById('uploadModal').classList.remove('open');
+    }
+    function handleFileSelected(input) {
+        const btn = document.getElementById('submitUploadBtn');
+        const display = document.getElementById('fileNameDisplay');
+        if (input.files && input.files[0]) {
+            display.innerText = "📄 Archivo seleccionado: " + input.files[0].name;
+            btn.disabled = false;
+        } else {
+            display.innerText = "Haz clic aquí para seleccionar el archivo Excel (.xlsx)";
+            btn.disabled = true;
+        }
+    }
+    function submitExcelUpload() {
+        const fileInput = document.getElementById('excelFileInput');
+        if (!fileInput.files || !fileInput.files[0]) return;
+
+        const formData = new FormData();
+        formData.append('excel_file', fileInput.files[0]);
+
+        const progress = document.getElementById('uploadProgress');
+        const btn = document.getElementById('submitUploadBtn');
+        progress.style.display = 'block';
+        btn.disabled = true;
+
+        fetch("{% url 'taxonomy:upload_sap_excel' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            progress.style.display = 'none';
+            if (data.success) {
+                alert(data.message);
+                window.location.reload();
+            } else {
+                alert("Error al cargar archivo Excel: " + data.error);
+                btn.disabled = false;
+            }
+        })
+        .catch(err => {
+            progress.style.display = 'none';
+            alert("Error de conexión: " + err);
+            btn.disabled = false;
+        });
     }
 
     function triggerAiSingle(pk) {

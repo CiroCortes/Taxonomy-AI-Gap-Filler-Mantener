@@ -5,6 +5,7 @@ from django.shortcuts import render, get_object_or_404
 from django.core.paginator import Paginator
 from django.http import JsonResponse, HttpResponse
 from django.db.models import Q
+from django.db import transaction
 from django.utils import timezone
 from taxonomy.models import SKUItem
 from ai_engine.gap_classifier import GeminiGapClassifier
@@ -112,6 +113,140 @@ def sku_list_view(request):
         'categorias_list': categorias_list,
     }
     return render(request, 'taxonomy/sku_list.html', context)
+
+
+def upload_sap_excel_view(request):
+    """Vista AJAX para carga directa de archivo Excel del Maestro SAP desde el navegador Web."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    if 'excel_file' not in request.FILES:
+        return JsonResponse({'success': False, 'error': 'No se adjunto ningún archivo Excel.'}, status=400)
+
+    excel_file = request.FILES['excel_file']
+    if not excel_file.name.endswith(('.xlsx', '.xls')):
+        return JsonResponse({'success': False, 'error': 'El archivo debe tener formato .xlsx o .xls'}, status=400)
+
+    try:
+        wb = openpyxl.load_workbook(excel_file, read_only=True)
+        sheet = wb.active
+        rows_iter = sheet.iter_rows(values_only=True)
+
+        headers = next(rows_iter, None)
+        if not headers:
+            return JsonResponse({'success': False, 'error': 'El archivo Excel está vacío.'}, status=400)
+
+        header_map = {str(h).strip(): i for i, h in enumerate(headers) if h is not None}
+
+        def get_val(row, col_name, default=None):
+            idx = header_map.get(col_name)
+            if idx is not None and idx < len(row):
+                val = row[idx]
+                return val if val is not None else default
+            return default
+
+        existing_skus = {s.item_code: s for s in SKUItem.objects.all()}
+        items_to_create = []
+        items_to_update = []
+        created_count = 0
+        updated_count = 0
+        incomplete_count = 0
+        total_rows = 0
+
+        for row in rows_iter:
+            item_code = get_val(row, 'ItemCode')
+            if not item_code:
+                continue
+
+            total_rows += 1
+            item_code_str = str(item_code).strip()
+            item_name_str = str(get_val(row, 'ItemName', '')).strip()
+
+            stock_val = float(get_val(row, 'Stock', 0.0) or 0.0)
+            costo_un_val = Decimal(str(get_val(row, '$Costo UN', 0.0) or 0.0))
+            costo_tt_val = Decimal(str(get_val(row, '$Costo TT', 0.0) or 0.0))
+            moneda_val = str(get_val(row, 'Moneda', '')) if get_val(row, 'Moneda') else None
+            precio_lista_val = Decimal(str(get_val(row, 'Precio Lista', 0.0) or 0.0))
+
+            cod_grupo_val = str(get_val(row, 'Cod.Grupo', '')) if get_val(row, 'Cod.Grupo') else None
+            nombre_grupo_val = str(get_val(row, 'Nombre Grupo', '')) if get_val(row, 'Nombre Grupo') else None
+            clase_val = str(get_val(row, 'Clase', '')) if get_val(row, 'Clase') else None
+            familia_val = str(get_val(row, 'Familia', '')) if get_val(row, 'Familia') else None
+            subfamilia_val = str(get_val(row, 'SubFamilia', '')) if get_val(row, 'SubFamilia') else None
+            modelo_val = str(get_val(row, 'Modelo', '')) if get_val(row, 'Modelo') else None
+            categoria_val = str(get_val(row, 'Categoria', '')) if get_val(row, 'Categoria') else None
+
+            clase_val = clase_val if (clase_val and clase_val.strip()) else None
+            familia_val = familia_val if (familia_val and familia_val.strip()) else None
+            subfamilia_val = subfamilia_val if (subfamilia_val and subfamilia_val.strip()) else None
+            modelo_val = modelo_val if (modelo_val and modelo_val.strip()) else None
+            categoria_val = categoria_val if (categoria_val and categoria_val.strip()) else None
+
+            if item_code_str in existing_skus:
+                sku_obj = existing_skus[item_code_str]
+                sku_obj.item_name = item_name_str
+                sku_obj.stock = stock_val
+                sku_obj.costo_un = costo_un_val
+                sku_obj.costo_tt = costo_tt_val
+                sku_obj.moneda = moneda_val
+                sku_obj.precio_lista = precio_lista_val
+                sku_obj.cod_grupo = cod_grupo_val
+                sku_obj.nombre_grupo = nombre_grupo_val
+                sku_obj.clase = clase_val
+                sku_obj.familia = familia_val
+                sku_obj.subfamilia = subfamilia_val
+                sku_obj.modelo = modelo_val
+                sku_obj.categoria = categoria_val
+                if sku_obj.check_incomplete():
+                    incomplete_count += 1
+                items_to_update.append(sku_obj)
+                updated_count += 1
+            else:
+                sku_obj = SKUItem(
+                    item_code=item_code_str,
+                    item_name=item_name_str,
+                    stock=stock_val,
+                    costo_un=costo_un_val,
+                    costo_tt=costo_tt_val,
+                    moneda=moneda_val,
+                    precio_lista=precio_lista_val,
+                    cod_grupo=cod_grupo_val,
+                    nombre_grupo=nombre_grupo_val,
+                    clase=clase_val,
+                    familia=familia_val,
+                    subfamilia=subfamilia_val,
+                    modelo=modelo_val,
+                    categoria=categoria_val,
+                )
+                if sku_obj.check_incomplete():
+                    incomplete_count += 1
+                items_to_create.append(sku_obj)
+                created_count += 1
+
+        wb.close()
+
+        with transaction.atomic():
+            if items_to_create:
+                SKUItem.objects.bulk_create(items_to_create, batch_size=2000)
+            if items_to_update:
+                SKUItem.objects.bulk_update(items_to_update, fields=[
+                    'item_name', 'stock', 'costo_un', 'costo_tt', 'moneda',
+                    'precio_lista', 'cod_grupo', 'nombre_grupo', 'clase',
+                    'familia', 'subfamilia', 'modelo', 'categoria',
+                    'is_incomplete', 'pending_fields'
+                ], batch_size=2000)
+
+        return JsonResponse({
+            'success': True,
+            'total_rows': total_rows,
+            'created_count': created_count,
+            'updated_count': updated_count,
+            'incomplete_count': incomplete_count,
+            'message': f"Maestro actualizado con éxito. Procesadas {total_rows} filas ({created_count} creadas, {updated_count} actualizadas)."
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 def process_single_sku_ai(request, pk):
