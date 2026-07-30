@@ -62,13 +62,34 @@
             padding: 0.35rem 0.75rem;
             border-radius: 0.5rem;
             font-size: 0.9rem;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.04em;
         }
 
         .logo-title {
-            font-size: 1.25rem;
+            font-size: 1.2rem;
             font-weight: 700;
             color: var(--text-main);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .nav-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 0.4rem 0.85rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: var(--text-main);
+            background-color: var(--bg-card-hover);
         }
 
         main {
@@ -76,45 +97,6 @@
             margin: 2rem auto;
             padding: 0 1.5rem;
         }
-
-        .kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 1.25rem;
-            margin-bottom: 2rem;
-        }
-
-        .kpi-card {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 0.75rem;
-            padding: 1.25rem;
-            transition: transform 0.2s ease, border-color 0.2s ease;
-        }
-
-        .kpi-card:hover {
-            transform: translateY(-2px);
-            border-color: var(--accent-blue);
-        }
-
-        .kpi-title {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .kpi-value {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-top: 0.5rem;
-        }
-
-        .kpi-value.blue { color: var(--accent-blue); }
-        .kpi-value.amber { color: var(--accent-amber); }
-        .kpi-value.rose { color: var(--accent-rose); }
-        .kpi-value.emerald { color: var(--accent-emerald); }
 
         .btn {
             display: inline-flex;
@@ -168,10 +150,20 @@
     <header>
         <div class="logo-container">
             <span class="logo-badge">PESCO S.A.</span>
-            <span class="logo-title">Taxonomy AI & Gap-Filler Mantener</span>
+            <span class="logo-title">Maestro de Artículos & AI Gap-Filler</span>
         </div>
+
+        <nav class="nav-links">
+            <a href="{% url 'taxonomy:sku_list' %}" class="nav-link {% if request.resolver_match.url_name == 'sku_list' %}active{% endif %}">
+                📊 Maestro & Dashboard
+            </a>
+            <a href="{% url 'taxonomy:batch_ai' %}" class="nav-link {% if request.resolver_match.url_name == 'batch_ai' %}active{% endif %}">
+                ✨ Clasificación por Lotes (Pruebas IA)
+            </a>
+        </nav>
+
         <div>
-            <span class="badge badge-info">Gemini 2.5 Flash + RAG Local</span>
+            <span class="badge badge-info">Gemini 3.6 Flash + RAG SAP</span>
         </div>
     </header>
 

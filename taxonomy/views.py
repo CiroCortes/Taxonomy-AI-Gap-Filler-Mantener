@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.shortcuts import render, get_object_or_404
 from django.core.paginator import Paginator
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.db import transaction
 from django.utils import timezone
 from taxonomy.models import SKUItem
@@ -113,6 +113,133 @@ def sku_list_view(request):
         'categorias_list': categorias_list,
     }
     return render(request, 'taxonomy/sku_list.html', context)
+
+
+def batch_ai_view(request):
+    """Vista de la nueva página interactiva para Pruebas y Clasificación por Lotes con IA."""
+    groups_summary = list(SKUItem.objects.values('nombre_grupo').annotate(
+        total=Count('id'),
+        pending=Count('id', filter=Q(is_incomplete=True))
+    ).filter(pending__gt=0).order_by('-pending'))
+
+    clases_list = SKUItem.objects.exclude(clase__isnull=True).exclude(clase='').values_list('clase', flat=True).distinct().order_by('clase')
+    
+    context = {
+        'groups_summary': groups_summary,
+        'clases_list': clases_list,
+    }
+    return render(request, 'taxonomy/batch_ai.html', context)
+
+
+def process_batch_ai_ajax(request):
+    """Vista AJAX para procesar un lote configurable de SKUs (ej: 20 SKUs) filtrados por grupo o clase."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
+    if not api_key or not api_key.strip():
+        return JsonResponse({'success': False, 'error': 'No se encontró la clave GEMINI_API_KEY en tu archivo .env. Por favor agrégala en el archivo .env'}, status=400)
+
+    try:
+        data = json.loads(request.body)
+        grupo_selected = data.get('grupo', '').strip()
+        clase_selected = data.get('clase', '').strip()
+        batch_limit = int(data.get('limit', 20))
+
+        incomplete_qs = SKUItem.objects.filter(is_incomplete=True)
+
+        if grupo_selected:
+            incomplete_qs = incomplete_qs.filter(nombre_grupo=grupo_selected)
+        if clase_selected:
+            incomplete_qs = incomplete_qs.filter(clase=clase_selected)
+
+        skus_to_process = list(incomplete_qs.order_by('item_code')[:batch_limit])
+        if not skus_to_process:
+            return JsonResponse({'success': False, 'error': 'No hay SKUs pendientes que coincidan con los filtros seleccionados.'}, status=400)
+
+        classifier = GeminiGapClassifier(api_key=api_key)
+        allowed_clases = list(SKUItem.objects.exclude(clase__isnull=True).exclude(clase='').values_list('clase', flat=True).distinct())
+        allowed_familias = list(SKUItem.objects.exclude(familia__isnull=True).exclude(familia='').values_list('familia', flat=True).distinct())
+
+        results = []
+
+        for sku in skus_to_process:
+            rag_matches = list(SKUItem.objects.filter(
+                is_incomplete=False,
+                nombre_grupo=sku.nombre_grupo
+            ).values('item_name', 'clase', 'familia', 'subfamilia')[:3])
+
+            current_data = {
+                "clase": sku.clase,
+                "familia": sku.familia,
+                "subfamilia": sku.subfamilia,
+                "categoria": sku.categoria
+            }
+
+            try:
+                res = classifier.fill_missing_fields(
+                    sku.item_name,
+                    sku.nombre_grupo or "",
+                    current_data,
+                    sku.pending_fields,
+                    rag_matches,
+                    allowed_clases=allowed_clases,
+                    allowed_familias=allowed_familias
+                )
+
+                if "clase" in sku.pending_fields and res.clase:
+                    if not allowed_clases or res.clase in allowed_clases:
+                        sku.clase = res.clase
+
+                if "familia" in sku.pending_fields and res.familia:
+                    if not allowed_familias or res.familia in allowed_familias:
+                        sku.familia = res.familia
+
+                if "subfamilia" in sku.pending_fields and res.subfamilia:
+                    sku.subfamilia = res.subfamilia
+
+                if "categoria" in sku.pending_fields and res.categoria:
+                    sku.categoria = res.categoria
+
+                sku.ai_confidence_score = res.confidence
+                sku.ai_rationale = res.rationale
+                sku.ai_processed = True
+                sku.ai_processed_at = timezone.now()
+                sku.check_incomplete()
+                sku.save()
+
+                results.append({
+                    'pk': sku.pk,
+                    'item_code': sku.item_code,
+                    'item_name': sku.item_name,
+                    'grupo': sku.nombre_grupo or '--',
+                    'clase': sku.clase or '--',
+                    'familia': sku.familia or '--',
+                    'subfamilia': sku.subfamilia or '--',
+                    'modelo': sku.modelo or '--',
+                    'categoria': sku.categoria or '--',
+                    'confidence': sku.ai_confidence_score,
+                    'rationale': sku.ai_rationale,
+                    'status': 'Completo' if not sku.is_incomplete else 'Incompleto'
+                })
+            except Exception as item_err:
+                results.append({
+                    'pk': sku.pk,
+                    'item_code': sku.item_code,
+                    'item_name': sku.item_name,
+                    'grupo': sku.nombre_grupo or '--',
+                    'error': str(item_err)
+                })
+
+        return JsonResponse({
+            'success': True,
+            'processed_count': len(results),
+            'grupo': grupo_selected or 'Todos',
+            'results': results
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 def upload_sap_excel_view(request):

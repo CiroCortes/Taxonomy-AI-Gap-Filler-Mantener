@@ -1,0 +1,367 @@
+{% extends 'base.html' %}
+
+{% block title %}Pruebas & Clasificación por Lotes (IA) | PESCO S.A.{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .card-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1.25rem;
+        align-items: end;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .form-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .form-select, .form-input {
+        background-color: var(--bg-dark);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        padding: 0.65rem 0.85rem;
+        border-radius: 0.5rem;
+        font-size: 0.9rem;
+        outline: none;
+        width: 100%;
+    }
+
+    .form-select:focus, .form-input:focus {
+        border-color: var(--accent-blue);
+    }
+
+    .progress-container {
+        display: none;
+        margin-top: 1.5rem;
+        background-color: var(--bg-dark);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+    }
+
+    .progress-bar-bg {
+        background-color: var(--bg-card-hover);
+        height: 14px;
+        border-radius: 7px;
+        overflow: hidden;
+        margin: 0.75rem 0;
+    }
+
+    .progress-bar-fill {
+        background: linear-gradient(90deg, var(--accent-blue), var(--accent-emerald));
+        height: 100%;
+        width: 0%;
+        transition: width 0.4s ease;
+    }
+
+    .results-table-container {
+        display: none;
+        margin-top: 1.5rem;
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+        font-size: 0.875rem;
+    }
+
+    th {
+        background-color: #0f172a;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        text-transform: uppercase;
+        font-size: 0.75rem;
+    }
+
+    td {
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    tr:hover td {
+        background-color: var(--bg-card-hover);
+    }
+
+    .badge-conf {
+        background: rgba(56, 189, 248, 0.15);
+        color: var(--accent-blue);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-title">
+        ✨ Módulo de Pruebas y Clasificación por Lotes (IA Gemini 3.6 Flash)
+    </div>
+    <div style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+        Selecciona un Grupo SAP específico (por ejemplo, los de Pañol) o una Clase, define la cantidad de SKUs a probar (por defecto <strong>20 SKUs</strong>) y ejecuta el motor de IA en tiempo real.
+    </div>
+
+    <div class="form-grid">
+        <!-- 1. Grupo SAP -->
+        <div class="form-group">
+            <label class="form-label">Grupo SAP a Normalizar:</label>
+            <select id="batchGrupo" class="form-select">
+                <option value="">-- Todos los Grupos Pendientes --</option>
+                {% for g in groups_summary %}
+                    <option value="{{ g.nombre_grupo }}">
+                        {{ g.nombre_grupo }} ({{ g.pending }} SKUs pendientes de {{ g.total }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- 2. Clase Filtro Opcional -->
+        <div class="form-group">
+            <label class="form-label">Filtrar por Clase (Opcional):</label>
+            <select id="batchClase" class="form-select">
+                <option value="">-- Todas las Clases --</option>
+                {% for item in clases_list %}
+                    <option value="{{ item }}">{{ item }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- 3. Límite de SKUs (Pruebas de 20 por defecto) -->
+        <div class="form-group">
+            <label class="form-label">Límite de SKUs por Lote:</label>
+            <select id="batchLimit" class="form-select">
+                <option value="5">5 SKUs (Prueba ultra rápida)</option>
+                <option value="10">10 SKUs (Prueba corta)</option>
+                <option value="20" selected>20 SKUs (Prueba Piloto Recomendada)</option>
+                <option value="50">50 SKUs (Lote Mediano)</option>
+                <option value="100">100 SKUs (Lote Grande)</option>
+            </select>
+        </div>
+
+        <!-- 4. Botón Iniciar -->
+        <div class="form-group">
+            <button id="runBatchBtn" type="button" onclick="startBatchProcessing()" class="btn btn-primary" style="padding: 0.7rem 1.25rem; font-size: 0.95rem; justify-content: center;">
+                🚀 Iniciar Clasificación Lote (IA)
+            </button>
+        </div>
+    </div>
+
+    <!-- Barra de Progreso y Consola Live -->
+    <div id="progressContainer" class="progress-container">
+        <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 0.9rem;">
+            <span id="progressStatusText">Procesando lote con IA Gemini...</span>
+            <span id="progressPercentageText">0%</span>
+        </div>
+        <div class="progress-bar-bg">
+            <div id="progressBarFill" class="progress-bar-fill"></div>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);" id="progressDetailText">
+            Procesando datos en tiempo real...
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de Resultados del Lote Procesado -->
+<div id="resultsTableContainer" class="results-table-container">
+    <div style="padding: 1.25rem; background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h3 style="font-size: 1.05rem; font-weight: 700;">✅ Resultados del Lote Procesado</h3>
+            <div style="font-size: 0.8rem; color: var(--text-muted);" id="resultsSummarySubtitle"></div>
+        </div>
+
+        <!-- Botón Exportar Carga SAP TI directo para este Lote -->
+        <a id="exportBatchTiBtn" href="#" class="btn btn-primary" style="background: linear-gradient(135deg, #10b981, #059669);" title="Descargar archivo Excel con formato de Carga Masiva SAP (DTW) e instrucciones para TI">
+            📥 Descargar Carga SAP (DTW) para TI
+        </a>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>SKU</th>
+                <th>Descripción Artículo</th>
+                <th>Grupo</th>
+                <th>Clase Asignada</th>
+                <th>Familia Asignada</th>
+                <th>SubFamilia (Marca)</th>
+                <th>Modelo</th>
+                <th>Categoría</th>
+                <th>Confianza IA</th>
+            </tr>
+        </thead>
+        <tbody id="resultsTbody">
+            <!-- Rellenado dinámicamente con JavaScript -->
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function startBatchProcessing() {
+        const grupo = document.getElementById('batchGrupo').value;
+        const clase = document.getElementById('batchClase').value;
+        const limit = document.getElementById('batchLimit').value;
+
+        const runBtn = document.getElementById('runBatchBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBarFill = document.getElementById('progressBarFill');
+        const progressStatusText = document.getElementById('progressStatusText');
+        const progressPercentageText = document.getElementById('progressPercentageText');
+        const progressDetailText = document.getElementById('progressDetailText');
+        const resultsContainer = document.getElementById('resultsTableContainer');
+
+        runBtn.disabled = true;
+        runBtn.innerText = "⏳ Ejecutando IA...";
+
+        progressContainer.style.display = 'block';
+        resultsContainer.style.display = 'none';
+
+        progressBarFill.style.width = '15%';
+        progressPercentageText.innerText = '15%';
+        progressStatusText.innerText = `Consultando ${limit} SKUs en Gemini 3.6 Flash...`;
+        progressDetailText.innerText = `Grupo: ${grupo || 'Todos'} | Límite: ${limit} SKUs. Por favor espera unos segundos...`;
+
+        fetch("{% url 'taxonomy:process_batch_ai' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                grupo: grupo,
+                clase: clase,
+                limit: limit
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                progressBarFill.style.width = '100%';
+                progressPercentageText.innerText = '100%';
+                progressStatusText.innerText = `🎉 Lote finalizado con éxito! (${data.processed_count} SKUs clasificados)`;
+                progressDetailText.innerText = `Todos los campos fueron actualizados en la base de datos siguiendo las listas oficiales de SAP PESCO.`;
+
+                // Renderizar tabla de resultados
+                renderResultsTable(data);
+
+                runBtn.disabled = false;
+                runBtn.innerText = "🚀 Iniciar Clasificación Lote (IA)";
+            } else {
+                alert("Error al procesar lote: " + data.error);
+                progressContainer.style.display = 'none';
+                runBtn.disabled = false;
+                runBtn.innerText = "🚀 Iniciar Clasificación Lote (IA)";
+            }
+        })
+        .catch(err => {
+            alert("Error de conexión: " + err);
+            progressContainer.style.display = 'none';
+            runBtn.disabled = false;
+            runBtn.innerText = "🚀 Iniciar Clasificación Lote (IA)";
+        });
+    }
+
+    function renderResultsTable(data) {
+        const resultsContainer = document.getElementById('resultsTableContainer');
+        const tbody = document.getElementById('resultsTbody');
+        const subtitle = document.getElementById('resultsSummarySubtitle');
+        const exportBtn = document.getElementById('exportBatchTiBtn');
+
+        subtitle.innerText = `Se procesaron ${data.processed_count} SKUs del grupo '${data.grupo}'.`;
+        
+        let exportUrl = "{% url 'taxonomy:export_ti_excel' %}?scope=ai_processed";
+        if (data.grupo && data.grupo !== 'Todos') {
+            exportUrl += "&grupo=" + encodeURIComponent(data.grupo);
+        }
+        exportBtn.href = exportUrl;
+
+        tbody.innerHTML = '';
+
+        data.results.forEach(item => {
+            const tr = document.createElement('tr');
+            if (item.error) {
+                tr.innerHTML = `
+                    <td><strong>${item.item_code}</strong></td>
+                    <td>${item.item_name}</td>
+                    <td><span class="badge badge-info">${item.grupo}</span></td>
+                    <td colspan="6" style="color: var(--accent-rose);">Error: ${item.error}</td>
+                `;
+            } else {
+                const confPct = Math.round(item.confidence * 100);
+                tr.innerHTML = `
+                    <td><strong>${item.item_code}</strong></td>
+                    <td>${item.item_name}</td>
+                    <td><span class="badge badge-info">${item.grupo}</span></td>
+                    <td><strong style="color: var(--accent-blue);">${item.clase}</strong></td>
+                    <td><strong style="color: var(--accent-amber);">${item.familia}</strong></td>
+                    <td>${item.subfamilia}</td>
+                    <td>${item.modelo}</td>
+                    <td>${item.categoria}</td>
+                    <td>
+                        <span class="badge-conf" title="${item.rationale}">
+                            ✨ ${confPct}% Conf.
+                        </span>
+                    </td>
+                `;
+            }
+            tbody.appendChild(tr);
+        });
+
+        resultsContainer.style.display = 'block';
+    }
+</script>
+{% endblock %}
