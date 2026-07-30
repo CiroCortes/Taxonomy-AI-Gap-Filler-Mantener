@@ -34,7 +34,7 @@ class GeminiGapClassifier:
                 import google.generativeai as genai_legacy
                 genai_legacy.configure(api_key=self.api_key)
                 self.legacy_model = genai_legacy.GenerativeModel(
-                    model_name="gemini-3.6-flash",
+                    model_name="gemini-3.5-flash-lite",
                     generation_config={"response_mime_type": "application/json", "temperature": 0.0}
                 )
                 self.use_google_generativeai = True
@@ -92,7 +92,15 @@ Responde siguiendo la estructura JSON:
 '''
 
         if self.use_google_genai:
-            for model_name in ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.0-flash', 'gemini-3.5-flash-lite']:
+            model_candidates = [
+                'gemini-3.6-flash',
+                'gemini-3.5-flash-lite',
+                'gemini-3.1-flash-lite',
+                'gemini-flash-lite-latest',
+                'gemini-flash-latest'
+            ]
+            last_err = None
+            for model_name in model_candidates:
                 try:
                     response = self.client.models.generate_content(
                         model=model_name,
@@ -103,20 +111,22 @@ Responde siguiendo la estructura JSON:
                         }
                     )
                     return DynamicTaxonomyFill.model_validate_json(response.text)
-                except Exception:
+                except Exception as ex:
+                    last_err = ex
                     continue
+
             # Fallback to legacy model if google.genai model fails
             try:
                 import google.generativeai as genai_legacy
                 genai_legacy.configure(api_key=self.api_key)
                 m = genai_legacy.GenerativeModel(
-                    model_name="gemini-3.6-flash",
+                    model_name="gemini-3.5-flash-lite",
                     generation_config={"response_mime_type": "application/json", "temperature": 0.0}
                 )
                 res = m.generate_content(prompt)
                 return DynamicTaxonomyFill.model_validate_json(res.text)
             except Exception as ex:
-                raise RuntimeError(f"No se pudo obtener respuesta de ningún modelo Gemini disponible: {str(ex)}")
+                raise RuntimeError(f"No se pudo obtener respuesta de ningún modelo Gemini disponible: {str(last_err or ex)}")
         elif self.use_google_generativeai:
             response = self.legacy_model.generate_content(prompt)
             return DynamicTaxonomyFill.model_validate_json(response.text)
