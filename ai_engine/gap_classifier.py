@@ -5,12 +5,12 @@ from pydantic import BaseModel, Field
 
 
 class DynamicTaxonomyFill(BaseModel):
-    clase: Optional[str] = Field(None, description="Clase asignada elegida estrictamente del catálogo oficial de SAP PESCO")
-    familia: Optional[str] = Field(None, description="Familia asignada elegida estrictamente del catálogo oficial de SAP PESCO")
-    subfamilia: Optional[str] = Field(None, description="Subfamilia/Marca asignada")
-    categoria: Optional[str] = Field(None, description="Categoría operacional")
+    clase: Optional[str] = Field(None, description="Nombre exacto de la Clase seleccionada del catálogo oficial SAP PESCO")
+    familia: Optional[str] = Field(None, description="Nombre exacto de la Familia seleccionada del catálogo oficial SAP PESCO")
+    subfamilia: Optional[str] = Field(None, description="Subfamilia o Marca asignada")
+    categoria: Optional[str] = Field(None, description="Categoría operacional asignada")
     confidence: float = Field(..., description="Nivel de certeza de 0.0 a 1.0")
-    rationale: str = Field(..., description="Explicación técnica del resultado")
+    rationale: str = Field(..., description="Explicación técnica detallada del resultado")
 
 
 class GeminiGapClassifier:
@@ -67,18 +67,17 @@ class GeminiGapClassifier:
 
         prompt = f'''
 Eres un especialista estricto en catalogación de repuestos y equipos para PESCO S.A.
-Rellena EXCLUSIVAMENTE los campos faltantes: {missing_fields}
+Tu objetivo es completar EXCLUSIVAMENTE los campos faltantes: {missing_fields}
 
 REGLAS DE ORO ANTI-ALUCINACIÓN (ESTRICTO SAP ERP PESCO):
 1. Para el campo 'clase', DEBES seleccionar EXCLUSIVAMENTE un valor contenido dentro de esta lista oficial de SAP:
 {clases_str}
-NO INVENTES NINGUNA CLASE QUE NO ESTÉ EN ESTA LISTA.
 
 2. Para el campo 'familia', DEBES seleccionar EXCLUSIVAMENTE un valor contenido dentro de esta lista oficial de SAP:
 {familias_str}
-NO INVENTES NINGUNA FAMILIA QUE NO ESTÉ EN ESTA LISTA. (Por ejemplo: NUNCA uses 'Químicos' si no pertenece a la lista).
 
-3. Si no encuentras una coincidencia oficial válida en las listas con alta certeza, no asignes valores inventados.
+3. OBLIGATORIO EN EL JSON DE SALIDA:
+Asigna los nombres exactos seleccionados directamente en las propiedades JSON correspondientes ('clase', 'familia', 'subfamilia', 'categoria'). NO dejes las claves en null en el JSON si en tu análisis identificas la familia o marca adecuada.
 
 DATOS DEL ARTÍCULO:
 - SKU / Descripción: {item_name}
