@@ -10,11 +10,14 @@ load_dotenv()
 
 
 class Command(BaseCommand):
-    help = "Procesa únicamente los SKUs que tienen atributos incompletos mediante el motor de IA Gemini + RAG."
+    help = "Procesa los SKUs pendientes por atributos incompletos filtrados opcionalmente por Grupo SAP."
 
     def add_arguments(self, parser):
         parser.add_argument('--api-key', type=str, required=False, default=None, help="Clave de la API de Google Gemini.")
         parser.add_argument('--limit', type=int, default=500, help="Límite máximo de SKUs a procesar en esta tanda.")
+        parser.add_argument('--grupo', type=str, default=None, help="Filtrar por nombre exacto del Grupo SAP (ej: 'PAÑOL EPP').")
+        parser.add_argument('--grupo-contains', type=str, default=None, help="Filtrar por coincidencia parcial en el Grupo SAP (ej: 'PAÑOL').")
+        parser.add_argument('--delay', type=float, default=0.5, help="Pausa en segundos entre consultas a la API de Gemini.")
 
     def handle(self, *args, **options):
         api_key = options.get('api_key') or os.getenv('GEMINI_API_KEY')
@@ -23,11 +26,24 @@ class Command(BaseCommand):
             return
 
         classifier = GeminiGapClassifier(api_key=api_key)
-        incomplete_skus = SKUItem.objects.filter(is_incomplete=True)[:options['limit']]
+        
+        incomplete_qs = SKUItem.objects.filter(is_incomplete=True)
+
+        grupo_exact = options.get('grupo')
+        grupo_contains = options.get('grupo_contains')
+
+        if grupo_exact:
+            incomplete_qs = incomplete_qs.filter(nombre_grupo=grupo_exact.strip())
+            self.stdout.write(f"Filtrando por Grupo exacto: '{grupo_exact}'")
+        elif grupo_contains:
+            incomplete_qs = incomplete_qs.filter(nombre_grupo__icontains=grupo_contains.strip())
+            self.stdout.write(f"Filtrando por Grupos que contienen: '{grupo_contains}'")
+
+        incomplete_skus = list(incomplete_qs.order_by('item_code')[:options['limit']])
         
         total_pending = len(incomplete_skus)
         if total_pending == 0:
-            self.stdout.write(self.style.SUCCESS("No hay SKUs pendientes de clasificación."))
+            self.stdout.write(self.style.SUCCESS("No se encontraron SKUs pendientes que coincidan con los filtros."))
             return
 
         self.stdout.write(f"Procesando {total_pending} SKUs pendientes con el motor Gemini...")
@@ -38,8 +54,9 @@ class Command(BaseCommand):
 
         processed_ok = 0
         errors = 0
+        delay_sec = options['delay']
 
-        for sku in incomplete_skus:
+        for idx, sku in enumerate(incomplete_skus, start=1):
             # RAG Local: Recuperar hasta 3 ejemplos de SKUs ya completos pertenecientes al mismo grupo
             rag_matches = list(SKUItem.objects.filter(
                 is_incomplete=False,
@@ -86,11 +103,14 @@ class Command(BaseCommand):
                 sku.save()
 
                 processed_ok += 1
-                self.stdout.write(f"[OK] SKU {sku.item_code} | Confianza: {result.confidence:.2f} | Razonamiento: {result.rationale}")
+                self.stdout.write(f"[{idx}/{total_pending}] [OK] SKU {sku.item_code} | Grupo: {sku.nombre_grupo} | Confianza: {result.confidence:.2f} | Razonamiento: {result.rationale}")
 
             except Exception as e:
                 errors += 1
-                self.stderr.write(f"[ERROR] SKU {sku.item_code}: {str(e)}")
+                self.stderr.write(f"[{idx}/{total_pending}] [ERROR] SKU {sku.item_code}: {str(e)}")
+
+            if delay_sec > 0 and idx < total_pending:
+                time.sleep(delay_sec)
 
         self.stdout.write(self.style.SUCCESS(
             f"\nEjecución finalizada:\n"
