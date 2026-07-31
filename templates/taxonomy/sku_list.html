@@ -225,42 +225,42 @@
 {% endblock %}
 
 {% block content %}
-<!-- KPI Summary Cards Clickeables Uniformes -->
+<!-- KPI Summary Cards Dinámicas -->
 <div class="kpi-grid">
     <a href="{% url 'taxonomy:sku_list' %}" class="kpi-link">
         <div class="kpi-card {% if not missing_filter and status_filter == 'all' and not grupo_filter and not clase_filter and not familia_filter and not subfamilia_filter and not modelo_filter and not categoria_filter %}active{% endif %}">
             <div class="kpi-title">Total SKUs SAP</div>
-            <div class="kpi-value blue">{{ total_count }}</div>
+            <div class="kpi-value blue" id="kpi-total-count">{{ total_count }}</div>
         </div>
     </a>
     <a href="?missing=clase" class="kpi-link">
         <div class="kpi-card {% if missing_filter == 'clase' %}active{% endif %}">
             <div class="kpi-title">Pendientes Clase</div>
-            <div class="kpi-value rose">{{ sin_clase_count }}</div>
+            <div class="kpi-value rose" id="kpi-sin-clase-count">{{ sin_clase_count }}</div>
         </div>
     </a>
     <a href="?missing=familia" class="kpi-link">
         <div class="kpi-card {% if missing_filter == 'familia' %}active{% endif %}">
             <div class="kpi-title">Pendientes Familia</div>
-            <div class="kpi-value amber">{{ sin_familia_count }}</div>
+            <div class="kpi-value amber" id="kpi-sin-familia-count">{{ sin_familia_count }}</div>
         </div>
     </a>
     <a href="?missing=subfamilia" class="kpi-link">
         <div class="kpi-card {% if missing_filter == 'subfamilia' %}active{% endif %}">
             <div class="kpi-title">Pendientes SubFamilia (Marca)</div>
-            <div class="kpi-value amber">{{ sin_subfamilia_count }}</div>
+            <div class="kpi-value amber" id="kpi-sin-subfamilia-count">{{ sin_subfamilia_count }}</div>
         </div>
     </a>
     <a href="?missing=categoria" class="kpi-link">
         <div class="kpi-card {% if missing_filter == 'categoria' %}active{% endif %}">
             <div class="kpi-title">Pendientes Categoría</div>
-            <div class="kpi-value rose">{{ sin_categoria_count }}</div>
+            <div class="kpi-value rose" id="kpi-sin-categoria-count">{{ sin_categoria_count }}</div>
         </div>
     </a>
     <a href="?status=ai_processed" class="kpi-link">
         <div class="kpi-card {% if status_filter == 'ai_processed' %}active{% endif %}">
             <div class="kpi-title">Evaluados por IA</div>
-            <div class="kpi-value emerald">{{ ai_processed_count }}</div>
+            <div class="kpi-value emerald" id="kpi-ai-processed-count">{{ ai_processed_count }}</div>
         </div>
     </a>
 </div>
@@ -576,6 +576,27 @@
         return cookieValue;
     }
 
+    function updateKpiCards(stats) {
+        if (!stats) return;
+        if (document.getElementById('kpi-total-count')) document.getElementById('kpi-total-count').innerText = stats.total_count;
+        if (document.getElementById('kpi-sin-clase-count')) document.getElementById('kpi-sin-clase-count').innerText = stats.sin_clase_count;
+        if (document.getElementById('kpi-sin-familia-count')) document.getElementById('kpi-sin-familia-count').innerText = stats.sin_familia_count;
+        if (document.getElementById('kpi-sin-subfamilia-count')) document.getElementById('kpi-sin-subfamilia-count').innerText = stats.sin_subfamilia_count;
+        if (document.getElementById('kpi-sin-categoria-count')) document.getElementById('kpi-sin-categoria-count').innerText = stats.sin_categoria_count;
+        if (document.getElementById('kpi-ai-processed-count')) document.getElementById('kpi-ai-processed-count').innerText = stats.ai_processed_count;
+    }
+
+    function refreshKpisFromServer() {
+        fetch("{% url 'taxonomy:get_kpi_stats' %}")
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.kpi_stats) {
+                updateKpiCards(data.kpi_stats);
+            }
+        })
+        .catch(err => console.error("Error al refrescar KPIs:", err));
+    }
+
     function openUploadModal() {
         document.getElementById('uploadModal').classList.add('open');
     }
@@ -618,6 +639,7 @@
         .then(data => {
             progress.style.display = 'none';
             if (data.success) {
+                if (data.kpi_stats) updateKpiCards(data.kpi_stats);
                 alert(data.message);
                 window.location.reload();
             } else {
@@ -657,6 +679,10 @@
                 const statusTd = document.getElementById(`sku-status-${pk}`);
                 statusTd.innerHTML = `<span class="badge badge-success">Completo</span>
                     <div style="font-size: 0.7rem; color: var(--accent-emerald); margin-top: 0.2rem;">✨ Evaluado por IA (Confianza: ${data.confidence.toFixed(2)})</div>`;
+
+                if (data.kpi_stats) {
+                    updateKpiCards(data.kpi_stats);
+                }
 
                 if (btn) {
                     btn.disabled = false;
@@ -731,6 +757,10 @@
                     statusTd.innerHTML = `<span class="badge badge-warning">Incompleto</span>`;
                 }
 
+                if (data.kpi_stats) {
+                    updateKpiCards(data.kpi_stats);
+                }
+
                 closeEditModal();
             } else {
                 alert("Error al guardar edición manual: " + data.error);
@@ -740,5 +770,8 @@
             alert("Error de conexión: " + err);
         });
     }
+
+    // Refrescar tarjetas KPI dinámicamente al enfocar o volver a la pestaña
+    window.addEventListener('focus', refreshKpisFromServer);
 </script>
 {% endblock %}

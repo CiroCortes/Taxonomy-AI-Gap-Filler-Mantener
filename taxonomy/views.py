@@ -16,6 +16,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def get_kpi_stats():
+    """Función auxiliar para calcular las métricas KPI dinámicas del Dashboard."""
+    return {
+        'total_count': SKUItem.objects.count(),
+        'sin_clase_count': SKUItem.objects.filter(Q(clase__isnull=True) | Q(clase='')).count(),
+        'sin_familia_count': SKUItem.objects.filter(Q(familia__isnull=True) | Q(familia='')).count(),
+        'sin_subfamilia_count': SKUItem.objects.filter(Q(subfamilia__isnull=True) | Q(subfamilia='')).count(),
+        'sin_categoria_count': SKUItem.objects.filter(Q(categoria__isnull=True) | Q(categoria='')).count(),
+        'incomplete_total': SKUItem.objects.filter(is_incomplete=True).count(),
+        'ai_processed_count': SKUItem.objects.filter(ai_processed=True).count(),
+    }
+
+
+def get_kpi_stats_view(request):
+    """Vista AJAX JSON para consultar las métricas KPI dinámicas en tiempo real."""
+    return JsonResponse({'success': True, 'kpi_stats': get_kpi_stats()})
+
+
 def sku_list_view(request):
     """Vista principal del Dashboard del Maestro de Artículos PESCO."""
     query = request.GET.get('q', '').strip()
@@ -67,13 +85,7 @@ def sku_list_view(request):
         skus = skus.filter(categoria=categoria_filter)
 
     # Métricas KPI para el Dashboard
-    total_count = SKUItem.objects.count()
-    sin_clase_count = SKUItem.objects.filter(Q(clase__isnull=True) | Q(clase='')).count()
-    sin_familia_count = SKUItem.objects.filter(Q(familia__isnull=True) | Q(familia='')).count()
-    sin_subfamilia_count = SKUItem.objects.filter(Q(subfamilia__isnull=True) | Q(subfamilia='')).count()
-    sin_categoria_count = SKUItem.objects.filter(Q(categoria__isnull=True) | Q(categoria='')).count()
-    incomplete_total = SKUItem.objects.filter(is_incomplete=True).count()
-    ai_processed_count = SKUItem.objects.filter(ai_processed=True).count()
+    kpi_stats = get_kpi_stats()
 
     # Listas distintivas para los menús desplegables de filtro
     grupos_list = SKUItem.objects.exclude(nombre_grupo__isnull=True).exclude(nombre_grupo='').values_list('nombre_grupo', flat=True).distinct().order_by('nombre_grupo')
@@ -98,13 +110,13 @@ def sku_list_view(request):
         'subfamilia_filter': subfamilia_filter,
         'modelo_filter': modelo_filter,
         'categoria_filter': categoria_filter,
-        'total_count': total_count,
-        'sin_clase_count': sin_clase_count,
-        'sin_familia_count': sin_familia_count,
-        'sin_subfamilia_count': sin_subfamilia_count,
-        'sin_categoria_count': sin_categoria_count,
-        'incomplete_total': incomplete_total,
-        'ai_processed_count': ai_processed_count,
+        'total_count': kpi_stats['total_count'],
+        'sin_clase_count': kpi_stats['sin_clase_count'],
+        'sin_familia_count': kpi_stats['sin_familia_count'],
+        'sin_subfamilia_count': kpi_stats['sin_subfamilia_count'],
+        'sin_categoria_count': kpi_stats['sin_categoria_count'],
+        'incomplete_total': kpi_stats['incomplete_total'],
+        'ai_processed_count': kpi_stats['ai_processed_count'],
         'grupos_list': grupos_list,
         'clases_list': clases_list,
         'familias_list': familias_list,
@@ -235,7 +247,8 @@ def process_batch_ai_ajax(request):
             'success': True,
             'processed_count': len(results),
             'grupo': grupo_selected or 'Todos',
-            'results': results
+            'results': results,
+            'kpi_stats': get_kpi_stats()
         })
 
     except Exception as e:
@@ -383,7 +396,8 @@ def upload_sap_excel_view(request):
             'created_count': created_count,
             'updated_count': updated_count,
             'incomplete_count': incomplete_count,
-            'message': f"Maestro cargado con éxito. Procesadas {total_rows} filas ({created_count} creadas, {updated_count} actualizadas/reiniciadas)."
+            'message': f"Maestro cargado con éxito. Procesadas {total_rows} filas ({created_count} creadas, {updated_count} actualizadas/reiniciadas).",
+            'kpi_stats': get_kpi_stats()
         })
 
     except Exception as e:
@@ -459,6 +473,7 @@ def process_single_sku_ai(request, pk):
             'rationale': sku.ai_rationale,
             'is_incomplete': sku.is_incomplete,
             'pending_fields': sku.pending_fields,
+            'kpi_stats': get_kpi_stats()
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
@@ -497,6 +512,7 @@ def update_sku_taxonomy(request, pk):
             'categoria': sku.categoria or '--',
             'is_incomplete': sku.is_incomplete,
             'pending_fields': sku.pending_fields,
+            'kpi_stats': get_kpi_stats()
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

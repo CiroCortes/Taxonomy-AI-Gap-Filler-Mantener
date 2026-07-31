@@ -5,6 +5,7 @@ app_name = 'taxonomy'
 
 urlpatterns = [
     path('', views.sku_list_view, name='sku_list'),
+    path('api/kpi-stats/', views.get_kpi_stats_view, name='get_kpi_stats'),
     path('upload/excel/', views.upload_sap_excel_view, name='upload_sap_excel'),
     path('batch-ai/', views.batch_ai_view, name='batch_ai'),
     path('batch-ai/process/', views.process_batch_ai_ajax, name='process_batch_ai'),
