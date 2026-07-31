@@ -120,7 +120,7 @@ def batch_ai_view(request):
     groups_summary = list(SKUItem.objects.values('nombre_grupo').annotate(
         total=Count('id'),
         pending=Count('id', filter=Q(is_incomplete=True))
-    ).filter(pending__gt=0).order_by('-pending'))
+    ).filter(pending__gt=0).order_by('nombre_grupo'))
 
     clases_list = SKUItem.objects.exclude(clase__isnull=True).exclude(clase='').values_list('clase', flat=True).distinct().order_by('clase')
     
