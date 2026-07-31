@@ -453,7 +453,7 @@
         </div>
         <div class="modal-body">
             <div style="font-size: 0.85rem; color: var(--text-muted);">
-                Selecciona o arrastra el archivo Excel (<code>.xlsx</code>) actualizado desde SAP ERP. El sistema creará nuevos SKUs y actualizará los existentes automáticamente.
+                Selecciona o arrastra el archivo Excel (<code>.xlsx</code>) actualizado desde SAP ERP. El sistema actualizará la base de datos inmediatamente.
             </div>
             
             <form id="uploadForm" enctype="multipart/form-data">
@@ -464,15 +464,26 @@
                     </div>
                     <input type="file" id="excelFileInput" name="excel_file" accept=".xlsx, .xls" style="display: none;" onchange="handleFileSelected(this)">
                 </div>
+
+                <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--text-main);">
+                        <input type="checkbox" id="resetAiCheck" checked style="accent-color: var(--accent-blue);">
+                        <strong>Reiniciar evaluaciones previas de la IA</strong> (Vuelve todo a cero para realizar nuevas pruebas limpias)
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--accent-rose);">
+                        <input type="checkbox" id="clearDbCheck" style="accent-color: var(--accent-rose);">
+                        Limpiar toda la base de datos antes de importar
+                    </label>
+                </div>
             </form>
 
             <div id="uploadProgress" style="display: none; text-align: center; color: var(--accent-blue); font-weight: 600; margin-top: 0.5rem;">
-                ⏳ Procesando y actualizando base de datos SAP... Por favor espera unos segundos.
+                ⏳ Procesando y cargando base de datos SAP... Por favor espera unos segundos.
             </div>
         </div>
         <div class="modal-footer">
             <button type="button" onclick="closeUploadModal()" class="btn btn-secondary">Cancelar</button>
-            <button type="button" id="submitUploadBtn" onclick="submitExcelUpload()" class="btn btn-primary" disabled>📤 Subir y Actualizar</button>
+            <button type="button" id="submitUploadBtn" onclick="submitExcelUpload()" class="btn btn-primary" disabled>📤 Subir y Cargar</button>
         </div>
     </div>
 </div>
@@ -588,6 +599,8 @@
 
         const formData = new FormData();
         formData.append('excel_file', fileInput.files[0]);
+        formData.append('reset_ai', document.getElementById('resetAiCheck').checked ? 'true' : 'false');
+        formData.append('clear_db', document.getElementById('clearDbCheck').checked ? 'true' : 'false');
 
         const progress = document.getElementById('uploadProgress');
         const btn = document.getElementById('submitUploadBtn');

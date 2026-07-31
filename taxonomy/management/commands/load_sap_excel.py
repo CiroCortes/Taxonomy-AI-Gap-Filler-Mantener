@@ -48,9 +48,14 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--file', type=str, required=True, help="Ruta al archivo Excel del Maestro de Artículos.")
+        parser.add_argument('--clear', action='store_true', help="Elimina toda la base de datos antes de importar.")
+        parser.add_argument('--reset-ai', action='store_true', help="Limpia las evaluaciones previas de la IA y vuelve a cero.")
 
     def handle(self, *args, **options):
         excel_path = options['file']
+        clear_db = options['clear']
+        reset_ai = options['reset_ai']
+
         if not os.path.isabs(excel_path):
             excel_path = os.path.abspath(excel_path)
 
@@ -58,9 +63,12 @@ class Command(BaseCommand):
             self.stderr.write(f"Error: El archivo {excel_path} no existe.")
             return
 
+        if clear_db:
+            self.stdout.write("Limpiando toda la base de datos previa...")
+            SKUItem.objects.all().delete()
+
         self.stdout.write(f"Cargando archivo: {excel_path}...")
         
-        # Intentar cargar directo, o usar copia temporal compartida si está bloqueado por Excel
         working_file = excel_path
         temp_copied = False
         try:
@@ -81,7 +89,6 @@ class Command(BaseCommand):
             self.stderr.write("El archivo Excel está vacío.")
             return
 
-        # Normalizar headers a minusculas sin espacios
         header_map = {str(h).strip(): i for i, h in enumerate(headers) if h is not None}
 
         def get_val(row, col_name, default=None):
@@ -100,7 +107,6 @@ class Command(BaseCommand):
 
         from django.db import transaction
 
-        # Pre-cargar SKUs existentes en un diccionario para evitar N+1 queries
         existing_skus = {s.item_code: s for s in SKUItem.objects.all()}
 
         items_to_create = []
@@ -129,13 +135,13 @@ class Command(BaseCommand):
             modelo_val = str(get_val(row, 'Modelo', '')) if get_val(row, 'Modelo') else None
             categoria_val = str(get_val(row, 'Categoria', '')) if get_val(row, 'Categoria') else None
 
-            # Limpiar strings vacíos a None
             clase_val = clase_val if (clase_val and clase_val.strip()) else None
             familia_val = familia_val if (familia_val and familia_val.strip()) else None
             subfamilia_val = subfamilia_val if (subfamilia_val and subfamilia_val.strip()) else None
+            modelo_val = modelo_val if (modelo_val and modelo_val.strip()) else None
             categoria_val = categoria_val if (categoria_val and categoria_val.strip()) else None
 
-            if item_code_str in existing_skus:
+            if item_code_str in existing_skus and not clear_db:
                 sku_obj = existing_skus[item_code_str]
                 sku_obj.item_name = item_name_str
                 sku_obj.stock = stock_val
@@ -150,6 +156,13 @@ class Command(BaseCommand):
                 sku_obj.subfamilia = subfamilia_val
                 sku_obj.modelo = modelo_val
                 sku_obj.categoria = categoria_val
+
+                if reset_ai:
+                    sku_obj.ai_processed = False
+                    sku_obj.ai_confidence_score = None
+                    sku_obj.ai_rationale = None
+                    sku_obj.ai_processed_at = None
+
                 is_inc = sku_obj.check_incomplete()
                 if is_inc:
                     incomplete_count += 1
@@ -185,7 +198,7 @@ class Command(BaseCommand):
             except Exception:
                 pass
 
-        self.stdout.write("Guardando registros en la base de datos en batch...")
+        self.stdout.write("Guardando registros en la base de datos...")
         with transaction.atomic():
             if items_to_create:
                 SKUItem.objects.bulk_create(items_to_create, batch_size=2000)
@@ -194,7 +207,8 @@ class Command(BaseCommand):
                     'item_name', 'stock', 'costo_un', 'costo_tt', 'moneda',
                     'precio_lista', 'cod_grupo', 'nombre_grupo', 'clase',
                     'familia', 'subfamilia', 'modelo', 'categoria',
-                    'is_incomplete', 'pending_fields'
+                    'is_incomplete', 'pending_fields', 'ai_processed',
+                    'ai_confidence_score', 'ai_rationale', 'ai_processed_at'
                 ], batch_size=2000)
 
         self.stdout.write(self.style.SUCCESS(

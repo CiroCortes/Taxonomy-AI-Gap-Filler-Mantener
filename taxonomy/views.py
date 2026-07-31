@@ -243,7 +243,7 @@ def process_batch_ai_ajax(request):
 
 
 def upload_sap_excel_view(request):
-    """Vista AJAX para carga directa de archivo Excel del Maestro SAP desde el navegador Web."""
+    """Vista AJAX para carga directa de archivo Excel del Maestro SAP con opción de reinicio a cero."""
     if request.method != 'POST':
         return JsonResponse({'error': 'Método no permitido'}, status=405)
 
@@ -251,10 +251,16 @@ def upload_sap_excel_view(request):
         return JsonResponse({'success': False, 'error': 'No se adjuntó ningún archivo Excel.'}, status=400)
 
     excel_file = request.FILES['excel_file']
+    reset_ai = request.POST.get('reset_ai', 'true') == 'true'
+    clear_db = request.POST.get('clear_db', 'false') == 'true'
+
     if not excel_file.name.endswith(('.xlsx', '.xls')):
         return JsonResponse({'success': False, 'error': 'El archivo debe tener formato .xlsx o .xls'}, status=400)
 
     try:
+        if clear_db:
+            SKUItem.objects.all().delete()
+
         wb = openpyxl.load_workbook(excel_file, read_only=True)
         sheet = wb.active
         rows_iter = sheet.iter_rows(values_only=True)
@@ -272,7 +278,7 @@ def upload_sap_excel_view(request):
                 return val if val is not None else default
             return default
 
-        existing_skus = {s.item_code: s for s in SKUItem.objects.all()}
+        existing_skus = {s.item_code: s for s in SKUItem.objects.all()} if not clear_db else {}
         items_to_create = []
         items_to_update = []
         created_count = 0
@@ -324,6 +330,13 @@ def upload_sap_excel_view(request):
                 sku_obj.subfamilia = subfamilia_val
                 sku_obj.modelo = modelo_val
                 sku_obj.categoria = categoria_val
+
+                if reset_ai:
+                    sku_obj.ai_processed = False
+                    sku_obj.ai_confidence_score = None
+                    sku_obj.ai_rationale = None
+                    sku_obj.ai_processed_at = None
+
                 if sku_obj.check_incomplete():
                     incomplete_count += 1
                 items_to_update.append(sku_obj)
@@ -360,7 +373,8 @@ def upload_sap_excel_view(request):
                     'item_name', 'stock', 'costo_un', 'costo_tt', 'moneda',
                     'precio_lista', 'cod_grupo', 'nombre_grupo', 'clase',
                     'familia', 'subfamilia', 'modelo', 'categoria',
-                    'is_incomplete', 'pending_fields'
+                    'is_incomplete', 'pending_fields', 'ai_processed',
+                    'ai_confidence_score', 'ai_rationale', 'ai_processed_at'
                 ], batch_size=2000)
 
         return JsonResponse({
@@ -369,7 +383,7 @@ def upload_sap_excel_view(request):
             'created_count': created_count,
             'updated_count': updated_count,
             'incomplete_count': incomplete_count,
-            'message': f"Maestro actualizado con éxito. Procesadas {total_rows} filas ({created_count} creadas, {updated_count} actualizadas)."
+            'message': f"Maestro cargado con éxito. Procesadas {total_rows} filas ({created_count} creadas, {updated_count} actualizadas/reiniciadas)."
         })
 
     except Exception as e:
