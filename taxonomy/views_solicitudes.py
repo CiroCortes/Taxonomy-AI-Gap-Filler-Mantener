@@ -53,12 +53,28 @@ def solicitudes_dashboard_view(request):
     if status_filter != 'all':
         code_requests = code_requests.filter(status=status_filter)
         purchase_requests = purchase_requests.filter(status=status_filter)
+
+    pending_codes = CodeCreationRequest.objects.filter(status='pendiente').count()
+    pending_purchases = PurchaseRequest.objects.filter(status='pendiente').count()
+    approved_codes = CodeCreationRequest.objects.filter(status='aprobado').count()
+    approved_purchases = PurchaseRequest.objects.filter(status='aprobado').count()
+    rejected_codes = CodeCreationRequest.objects.filter(status='rechazado').count()
+    rejected_purchases = PurchaseRequest.objects.filter(status='rechazado').count()
+    total_codes = CodeCreationRequest.objects.count()
+    total_purchases = PurchaseRequest.objects.count()
+
     context = {
         'code_requests': code_requests,
         'purchase_requests': purchase_requests,
         'status_filter': status_filter,
-        'pending_codes_count': CodeCreationRequest.objects.filter(status='pendiente').count(),
-        'pending_purchases_count': PurchaseRequest.objects.filter(status='pendiente').count(),
+        'pending_codes_count': pending_codes,
+        'pending_purchases_count': pending_purchases,
+        'pending_count': pending_codes + pending_purchases,
+        'approved_count': approved_codes + approved_purchases,
+        'rejected_count': rejected_codes + rejected_purchases,
+        'total_codes_count': total_codes,
+        'total_purchases_count': total_purchases,
+        'total_requests_count': total_codes + total_purchases,
     }
     return render(request, 'solicitudes/dashboard_admin.html', context)
 

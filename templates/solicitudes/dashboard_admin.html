@@ -1,56 +1,122 @@
-﻿{% extends "base_solicitudes.html" %}
+{% extends "base_solicitudes.html" %}
 {% block title %}Dashboard Solicitudes | PESCO S.A.{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
-    <h1 class="page-title">🗂 Panel de Administración</h1>
-    <p class="page-subtitle">Revisa, aprueba o rechaza las solicitudes enviadas por los equipos.</p>
+    <h1 class="page-title">📊 Dashboard de Solicitudes</h1>
+    <p class="page-subtitle">Gestión centralizada y seguimiento de creación de códigos y requerimientos de compra.</p>
   </div>
-  <div class="kpi-badges">
-    <span class="kpi-badge kpi-amber">📋 {{ pending_codes_count }} Código(s) pendiente(s)</span>
-    <span class="kpi-badge kpi-blue">🛒 {{ pending_purchases_count }} Compra(s) pendiente(s)</span>
+  <div style="display:flex;gap:.5rem;align-items:center;">
+    <a href="{% url 'taxonomy:solicitudes_nueva_codigo' %}" class="filter-btn active" style="text-decoration:none;">➕ Nuevo Código</a>
+    <a href="{% url 'taxonomy:solicitudes_nueva_compra' %}" class="filter-btn" style="text-decoration:none;">🛒 Nueva Compra</a>
+  </div>
+</div>
+
+<!-- ─── 6 Tarjetas KPI (Estilo Sistema PESCO) ─── -->
+<div class="kpi-grid">
+  <!-- Total Solicitudes -->
+  <div class="kpi-card kpi-blue">
+    <div class="kpi-card-header">
+      <span class="kpi-card-title">Total Solicitudes</span>
+      <span class="kpi-card-icon">📁</span>
+    </div>
+    <div class="kpi-card-value">{{ total_requests_count }}</div>
+    <div class="kpi-card-sub">Códigos + Compras</div>
+  </div>
+
+  <!-- Pendientes -->
+  <div class="kpi-card kpi-amber">
+    <div class="kpi-card-header">
+      <span class="kpi-card-title">Pendientes</span>
+      <span class="kpi-card-icon">⏳</span>
+    </div>
+    <div class="kpi-card-value" style="color:var(--amber);">{{ pending_count }}</div>
+    <div class="kpi-card-sub">Esperando revisión admin</div>
+  </div>
+
+  <!-- Códigos de Artículo -->
+  <div class="kpi-card kpi-cyan">
+    <div class="kpi-card-header">
+      <span class="kpi-card-title">Creación Códigos</span>
+      <span class="kpi-card-icon">🏷️</span>
+    </div>
+    <div class="kpi-card-value" style="color:#0077b6;">{{ total_codes_count }}</div>
+    <div class="kpi-card-sub">{{ pending_codes_count }} por autorizar</div>
+  </div>
+
+  <!-- Solicitudes de Compra -->
+  <div class="kpi-card kpi-indigo">
+    <div class="kpi-card-header">
+      <span class="kpi-card-title">Solicitudes Compra</span>
+      <span class="kpi-card-icon">🛒</span>
+    </div>
+    <div class="kpi-card-value" style="color:#6366f1;">{{ total_purchases_count }}</div>
+    <div class="kpi-card-sub">{{ pending_purchases_count }} por autorizar</div>
+  </div>
+
+  <!-- Aprobadas -->
+  <div class="kpi-card kpi-emerald">
+    <div class="kpi-card-header">
+      <span class="kpi-card-title">Aprobadas</span>
+      <span class="kpi-card-icon">✅</span>
+    </div>
+    <div class="kpi-card-value" style="color:var(--emerald);">{{ approved_count }}</div>
+    <div class="kpi-card-sub">Notificadas por correo</div>
+  </div>
+
+  <!-- Rechazadas -->
+  <div class="kpi-card kpi-rose">
+    <div class="kpi-card-header">
+      <span class="kpi-card-title">Rechazadas</span>
+      <span class="kpi-card-icon">⚠️</span>
+    </div>
+    <div class="kpi-card-value" style="color:var(--rose);">{{ rejected_count }}</div>
+    <div class="kpi-card-sub">Con retroalimentación</div>
   </div>
 </div>
 
 <!-- Filtros de estado -->
 <div class="filter-bar">
-  <span class="filter-label">Filtrar por estado:</span>
-  <a href="?status=pendiente" class="filter-btn {% if status_filter == 'pendiente' %}active{% endif %}">⏳ Pendiente</a>
-  <a href="?status=aprobado" class="filter-btn {% if status_filter == 'aprobado' %}active{% endif %}">✅ Aprobado</a>
-  <a href="?status=rechazado" class="filter-btn {% if status_filter == 'rechazado' %}active{% endif %}">❌ Rechazado</a>
-  <a href="?status=all" class="filter-btn {% if status_filter == 'all' %}active{% endif %}">🔍 Todos</a>
+  <span class="filter-label">Estado:</span>
+  <a href="?status=pendiente" class="filter-btn {% if status_filter == 'pendiente' %}active{% endif %}">⏳ Pendientes ({{ pending_count }})</a>
+  <a href="?status=aprobado" class="filter-btn {% if status_filter == 'aprobado' %}active{% endif %}">✅ Aprobados ({{ approved_count }})</a>
+  <a href="?status=rechazado" class="filter-btn {% if status_filter == 'rechazado' %}active{% endif %}">❌ Rechazados ({{ rejected_count }})</a>
+  <a href="?status=all" class="filter-btn {% if status_filter == 'all' %}active{% endif %}">🔍 Ver Todos ({{ total_requests_count }})</a>
 </div>
 
 <!-- Tabla: Solicitudes de Creación de Código -->
 <section class="section-card">
-  <h2 class="section-title">📝 Solicitudes de Creación de Código SAP</h2>
+  <div class="section-title">
+    <span>📝 Solicitudes de Creación de Código SAP</span>
+    <span style="font-size:.8rem;font-weight:600;color:var(--muted);">Total listadas: {{ code_requests|length }}</span>
+  </div>
   {% if code_requests %}
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>#</th><th>Solicitante</th><th>Código Propuesto</th><th>Descripción</th><th>Código Base</th><th>Fecha</th><th>Estado</th><th>Acción</th>
+          <th>ID</th><th>Solicitante</th><th>Código Sugerido</th><th>Descripción</th><th>Artículo Base</th><th>Fecha</th><th>Estado</th><th>Acciones</th>
         </tr>
       </thead>
       <tbody>
         {% for r in code_requests %}
         <tr id="code-row-{{ r.pk }}">
-          <td>{{ r.pk }}</td>
-          <td><strong>{{ r.solicitante_nombre }}</strong></td>
+          <td><strong>#{{ r.pk }}</strong></td>
+          <td>{{ r.solicitante_nombre }}</td>
           <td><code class="code-chip">{{ r.generated_code|default:"—" }}</code></td>
-          <td title="{{ r.proposed_description }}">{{ r.proposed_description|truncatechars:60 }}</td>
+          <td title="{{ r.proposed_description }}"><strong>{{ r.proposed_description|truncatechars:60 }}</strong></td>
           <td>{% if r.base_sku %}<code class="code-chip muted">{{ r.base_sku.item_code }}</code>{% else %}—{% endif %}</td>
           <td>{{ r.created_at|date:"d/m/Y H:i" }}</td>
           <td><span class="badge-status badge-{{ r.status }}" id="status-code-{{ r.pk }}">{{ r.get_status_display }}</span></td>
           <td>
             {% if r.status == 'pendiente' %}
             <div class="action-btns">
-              <button class="btn-action approve" onclick="doAction('code', {{ r.pk }}, 'approve')">✅</button>
-              <button class="btn-action reject" onclick="doAction('code', {{ r.pk }}, 'reject')">❌</button>
-              <button class="btn-action detail" onclick="showDetail({{ r.pk }}, 'code')">🔍</button>
+              <button class="btn-action approve" title="Aprobar solicitud" onclick="doAction('code', {{ r.pk }}, 'approve')">✅</button>
+              <button class="btn-action reject" title="Rechazar solicitud" onclick="doAction('code', {{ r.pk }}, 'reject')">❌</button>
+              <button class="btn-action detail" title="Ver detalle / agregar nota" onclick="showDetail({{ r.pk }}, 'code')">📝</button>
             </div>
             {% else %}
-            <button class="btn-action detail" onclick="showDetail({{ r.pk }}, 'code')">🔍</button>
+            <button class="btn-action detail" title="Ver detalle" onclick="showDetail({{ r.pk }}, 'code')">🔍</button>
             {% endif %}
           </td>
         </tr>
@@ -59,29 +125,32 @@
     </table>
   </div>
   {% else %}
-  <div class="empty-state">No hay solicitudes de creación de código con este filtro.</div>
+  <div class="empty-state">No hay solicitudes de creación de código para este filtro.</div>
   {% endif %}
 </section>
 
 <!-- Tabla: Solicitudes de Compra -->
-<section class="section-card" style="margin-top:2rem;">
-  <h2 class="section-title">🛒 Solicitudes de Compra</h2>
+<section class="section-card">
+  <div class="section-title">
+    <span>🛒 Solicitudes de Compra (COMEX / Nacional)</span>
+    <span style="font-size:.8rem;font-weight:600;color:var(--muted);">Total listadas: {{ purchase_requests|length }}</span>
+  </div>
   {% if purchase_requests %}
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>#</th><th>Solicitante</th><th>Código SAP</th><th>Descripción</th><th>Cantidad</th><th>Costo Total</th><th>Tipo</th><th>Fecha</th><th>Estado</th><th>Acción</th>
+          <th>ID</th><th>Solicitante</th><th>Código SAP</th><th>Descripción</th><th>Cantidad</th><th>Costo Est.</th><th>Tipo</th><th>Fecha</th><th>Estado</th><th>Acciones</th>
         </tr>
       </thead>
       <tbody>
         {% for r in purchase_requests %}
         <tr id="purchase-row-{{ r.pk }}">
-          <td>{{ r.pk }}</td>
-          <td><strong>{{ r.solicitante_nombre }}</strong></td>
+          <td><strong>#{{ r.pk }}</strong></td>
+          <td>{{ r.solicitante_nombre }}</td>
           <td><code class="code-chip">{{ r.codigo_compra|default:"—" }}</code></td>
-          <td title="{{ r.descripcion }}">{{ r.descripcion|truncatechars:55 }}</td>
-          <td>{{ r.cantidad_solicitada }}</td>
+          <td title="{{ r.descripcion }}"><strong>{{ r.descripcion|truncatechars:55 }}</strong></td>
+          <td>{{ r.cantidad_solicitada }} un.</td>
           <td><strong>${{ r.costo_total|floatformat:0 }}</strong></td>
           <td><span class="badge-tipo">{{ r.get_tipo_compra_display }}</span></td>
           <td>{{ r.created_at|date:"d/m/Y H:i" }}</td>
@@ -89,9 +158,11 @@
           <td>
             {% if r.status == 'pendiente' %}
             <div class="action-btns">
-              <button class="btn-action approve" onclick="doAction('purchase', {{ r.pk }}, 'approve')">✅</button>
-              <button class="btn-action reject" onclick="doAction('purchase', {{ r.pk }}, 'reject')">❌</button>
+              <button class="btn-action approve" title="Aprobar compra" onclick="doAction('purchase', {{ r.pk }}, 'approve')">✅</button>
+              <button class="btn-action reject" title="Rechazar compra" onclick="doAction('purchase', {{ r.pk }}, 'reject')">❌</button>
             </div>
+            {% else %}
+            <span style="font-size:.78rem;color:var(--muted);">Procesado</span>
             {% endif %}
           </td>
         </tr>
@@ -100,21 +171,21 @@
     </table>
   </div>
   {% else %}
-  <div class="empty-state">No hay solicitudes de compra con este filtro.</div>
+  <div class="empty-state">No hay solicitudes de compra para este filtro.</div>
   {% endif %}
 </section>
 
 <!-- Modal de detalle / notas admin -->
 <div id="modal-overlay" class="modal-overlay hidden">
   <div class="modal-box">
-    <h3 id="modal-title" class="modal-title">Detalle de Solicitud</h3>
-    <div id="modal-body" class="modal-body"></div>
+    <h3 id="modal-title" class="modal-title">Gestión de Solicitud</h3>
+    <div id="modal-body" class="modal-body">Ingresa una nota o confirmación para el solicitante y equipo de abastecimiento:</div>
     <div class="modal-footer">
-      <label class="modal-label">Nota del administrador (opcional):</label>
-      <textarea id="modal-notes" rows="3" placeholder="Ej: Código creado en SAP como ZM-10045..."></textarea>
+      <label class="modal-label">Nota o N° asignado en SAP:</label>
+      <textarea id="modal-notes" rows="3" placeholder="Ej: Código creado en SAP con número ZM-00812 y habilitado para compras."></textarea>
       <div class="modal-actions">
-        <button class="btn-modal approve" id="btn-approve">✅ Aprobar</button>
-        <button class="btn-modal reject" id="btn-reject">❌ Rechazar</button>
+        <button class="btn-modal approve" id="btn-approve">✅ Aprobar con nota</button>
+        <button class="btn-modal reject" id="btn-reject">❌ Rechazar con motivo</button>
         <button class="btn-modal cancel" onclick="closeModal()">Cancelar</button>
       </div>
     </div>
@@ -126,7 +197,8 @@ const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
 let currentType = null, currentPk = null;
 
 function doAction(type, pk, action) {
-  if (!confirm(`¿Confirmas ${action === 'approve' ? 'APROBAR' : 'RECHAZAR'} esta solicitud?`)) return;
+  const accionTxt = action === 'approve' ? 'APROBAR' : 'RECHAZAR';
+  if (!confirm(`¿Confirmas ${accionTxt} la solicitud #${pk}? Se notificará por correo a abastecimiento.`)) return;
   const url = type === 'code'
     ? `/solicitudes/codigo/${pk}/accion/`
     : `/solicitudes/compra/${pk}/accion/`;
@@ -144,13 +216,14 @@ function doAction(type, pk, action) {
         badge.className = `badge-status badge-${action === 'approve' ? 'aprobado' : 'rechazado'}`;
       }
       const row = document.getElementById(`${type === 'code' ? 'code' : 'purchase'}-row-${pk}`);
-      if (row) row.style.opacity = '0.5';
+      if (row) row.style.opacity = '0.55';
     }
   });
 }
 
 function showDetail(pk, type) {
   currentPk = pk; currentType = type;
+  document.getElementById('modal-title').textContent = `Revisión Solicitud #${pk} (${type === 'code' ? 'Código' : 'Compra'})`;
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('btn-approve').onclick = () => submitModal('approve');
   document.getElementById('btn-reject').onclick = () => submitModal('reject');
