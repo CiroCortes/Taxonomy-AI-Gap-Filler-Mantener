@@ -68,3 +68,25 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ─── Autenticación ─────────────────────────────────────────────────────────────
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/login/'
+
+# ─── Configuración de Correo Saliente ──────────────────────────────────────────
+# Para desarrollo/pruebas: los correos se imprimen en la consola del servidor.
+# Para producción, reemplaza por smtp.EmailBackend con los datos reales de PESCO.
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend'
+)
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.office365.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'sistema@pesco.cl')
+
+# Email de notificación de solicitudes
+ABASTECIMIENTO_EMAIL = os.getenv('ABASTECIMIENTO_EMAIL', 'abastecimiento@pesco.cl')

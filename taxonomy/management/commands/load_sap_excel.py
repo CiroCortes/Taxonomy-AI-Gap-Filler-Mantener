@@ -47,14 +47,25 @@ class Command(BaseCommand):
     help = "Carga el Maestro de Artículos SAP desde un archivo Excel a la base de datos."
 
     def add_arguments(self, parser):
-        parser.add_argument('--file', type=str, required=True, help="Ruta al archivo Excel del Maestro de Artículos.")
+        parser.add_argument('--file', type=str, required=False, help="Ruta al archivo Excel. Si no se especifica, busca el primer .xlsx en la carpeta 'data/'.")
         parser.add_argument('--clear', action='store_true', help="Elimina toda la base de datos antes de importar.")
         parser.add_argument('--reset-ai', action='store_true', help="Limpia las evaluaciones previas de la IA y vuelve a cero.")
 
     def handle(self, *args, **options):
-        excel_path = options['file']
+        excel_path = options.get('file')
         clear_db = options['clear']
         reset_ai = options['reset_ai']
+
+        if not excel_path:
+            from django.conf import settings
+            import glob
+            data_dir = os.path.join(settings.BASE_DIR, 'data')
+            excel_files = glob.glob(os.path.join(data_dir, '*.xlsx'))
+            if not excel_files:
+                self.stderr.write(f"Error: No se proporcionó --file y no se encontraron archivos .xlsx en {data_dir}.")
+                return
+            excel_path = excel_files[0]
+            self.stdout.write(f"No se especificó --file. Usando el archivo encontrado: {excel_path}")
 
         if not os.path.isabs(excel_path):
             excel_path = os.path.abspath(excel_path)

@@ -147,6 +147,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <div style="display: none;">{% csrf_token %}</div>
     <header>
         <div class="logo-container">
             <span class="logo-badge">PESCO S.A.</span>
@@ -155,10 +156,13 @@
 
         <nav class="nav-links">
             <a href="{% url 'taxonomy:sku_list' %}" class="nav-link {% if request.resolver_match.url_name == 'sku_list' %}active{% endif %}">
-                📊 Maestro & Dashboard
+                📊 Maestro &amp; Dashboard
             </a>
             <a href="{% url 'taxonomy:batch_ai' %}" class="nav-link {% if request.resolver_match.url_name == 'batch_ai' %}active{% endif %}">
                 ✨ Clasificación por Lotes (Pruebas IA)
+            </a>
+            <a href="{% url 'taxonomy:solicitudes_nueva_codigo' %}" class="nav-link" style="border:1px solid rgba(99,102,241,.4);color:#a78bfa;">
+                📋 Portal Requerimientos
             </a>
         </nav>
 

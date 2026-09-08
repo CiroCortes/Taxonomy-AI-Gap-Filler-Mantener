@@ -1,0 +1,171 @@
+﻿{% extends "base_solicitudes.html" %}
+{% block title %}Dashboard Solicitudes | PESCO S.A.{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">🗂 Panel de Administración</h1>
+    <p class="page-subtitle">Revisa, aprueba o rechaza las solicitudes enviadas por los equipos.</p>
+  </div>
+  <div class="kpi-badges">
+    <span class="kpi-badge kpi-amber">📋 {{ pending_codes_count }} Código(s) pendiente(s)</span>
+    <span class="kpi-badge kpi-blue">🛒 {{ pending_purchases_count }} Compra(s) pendiente(s)</span>
+  </div>
+</div>
+
+<!-- Filtros de estado -->
+<div class="filter-bar">
+  <span class="filter-label">Filtrar por estado:</span>
+  <a href="?status=pendiente" class="filter-btn {% if status_filter == 'pendiente' %}active{% endif %}">⏳ Pendiente</a>
+  <a href="?status=aprobado" class="filter-btn {% if status_filter == 'aprobado' %}active{% endif %}">✅ Aprobado</a>
+  <a href="?status=rechazado" class="filter-btn {% if status_filter == 'rechazado' %}active{% endif %}">❌ Rechazado</a>
+  <a href="?status=all" class="filter-btn {% if status_filter == 'all' %}active{% endif %}">🔍 Todos</a>
+</div>
+
+<!-- Tabla: Solicitudes de Creación de Código -->
+<section class="section-card">
+  <h2 class="section-title">📝 Solicitudes de Creación de Código SAP</h2>
+  {% if code_requests %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Solicitante</th><th>Código Propuesto</th><th>Descripción</th><th>Código Base</th><th>Fecha</th><th>Estado</th><th>Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in code_requests %}
+        <tr id="code-row-{{ r.pk }}">
+          <td>{{ r.pk }}</td>
+          <td><strong>{{ r.solicitante_nombre }}</strong></td>
+          <td><code class="code-chip">{{ r.generated_code|default:"—" }}</code></td>
+          <td title="{{ r.proposed_description }}">{{ r.proposed_description|truncatechars:60 }}</td>
+          <td>{% if r.base_sku %}<code class="code-chip muted">{{ r.base_sku.item_code }}</code>{% else %}—{% endif %}</td>
+          <td>{{ r.created_at|date:"d/m/Y H:i" }}</td>
+          <td><span class="badge-status badge-{{ r.status }}" id="status-code-{{ r.pk }}">{{ r.get_status_display }}</span></td>
+          <td>
+            {% if r.status == 'pendiente' %}
+            <div class="action-btns">
+              <button class="btn-action approve" onclick="doAction('code', {{ r.pk }}, 'approve')">✅</button>
+              <button class="btn-action reject" onclick="doAction('code', {{ r.pk }}, 'reject')">❌</button>
+              <button class="btn-action detail" onclick="showDetail({{ r.pk }}, 'code')">🔍</button>
+            </div>
+            {% else %}
+            <button class="btn-action detail" onclick="showDetail({{ r.pk }}, 'code')">🔍</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">No hay solicitudes de creación de código con este filtro.</div>
+  {% endif %}
+</section>
+
+<!-- Tabla: Solicitudes de Compra -->
+<section class="section-card" style="margin-top:2rem;">
+  <h2 class="section-title">🛒 Solicitudes de Compra</h2>
+  {% if purchase_requests %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Solicitante</th><th>Código SAP</th><th>Descripción</th><th>Cantidad</th><th>Costo Total</th><th>Tipo</th><th>Fecha</th><th>Estado</th><th>Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in purchase_requests %}
+        <tr id="purchase-row-{{ r.pk }}">
+          <td>{{ r.pk }}</td>
+          <td><strong>{{ r.solicitante_nombre }}</strong></td>
+          <td><code class="code-chip">{{ r.codigo_compra|default:"—" }}</code></td>
+          <td title="{{ r.descripcion }}">{{ r.descripcion|truncatechars:55 }}</td>
+          <td>{{ r.cantidad_solicitada }}</td>
+          <td><strong>${{ r.costo_total|floatformat:0 }}</strong></td>
+          <td><span class="badge-tipo">{{ r.get_tipo_compra_display }}</span></td>
+          <td>{{ r.created_at|date:"d/m/Y H:i" }}</td>
+          <td><span class="badge-status badge-{{ r.status }}" id="status-purchase-{{ r.pk }}">{{ r.get_status_display }}</span></td>
+          <td>
+            {% if r.status == 'pendiente' %}
+            <div class="action-btns">
+              <button class="btn-action approve" onclick="doAction('purchase', {{ r.pk }}, 'approve')">✅</button>
+              <button class="btn-action reject" onclick="doAction('purchase', {{ r.pk }}, 'reject')">❌</button>
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">No hay solicitudes de compra con este filtro.</div>
+  {% endif %}
+</section>
+
+<!-- Modal de detalle / notas admin -->
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3 id="modal-title" class="modal-title">Detalle de Solicitud</h3>
+    <div id="modal-body" class="modal-body"></div>
+    <div class="modal-footer">
+      <label class="modal-label">Nota del administrador (opcional):</label>
+      <textarea id="modal-notes" rows="3" placeholder="Ej: Código creado en SAP como ZM-10045..."></textarea>
+      <div class="modal-actions">
+        <button class="btn-modal approve" id="btn-approve">✅ Aprobar</button>
+        <button class="btn-modal reject" id="btn-reject">❌ Rechazar</button>
+        <button class="btn-modal cancel" onclick="closeModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+let currentType = null, currentPk = null;
+
+function doAction(type, pk, action) {
+  if (!confirm(`¿Confirmas ${action === 'approve' ? 'APROBAR' : 'RECHAZAR'} esta solicitud?`)) return;
+  const url = type === 'code'
+    ? `/solicitudes/codigo/${pk}/accion/`
+    : `/solicitudes/compra/${pk}/accion/`;
+  fetch(url, {
+    method: 'POST',
+    headers: {'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded'},
+    body: `action=${action}&admin_notes=`
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      const badge = document.getElementById(`status-${type}-${pk}`);
+      if (badge) {
+        badge.textContent = data.new_status;
+        badge.className = `badge-status badge-${action === 'approve' ? 'aprobado' : 'rechazado'}`;
+      }
+      const row = document.getElementById(`${type === 'code' ? 'code' : 'purchase'}-row-${pk}`);
+      if (row) row.style.opacity = '0.5';
+    }
+  });
+}
+
+function showDetail(pk, type) {
+  currentPk = pk; currentType = type;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById('btn-approve').onclick = () => submitModal('approve');
+  document.getElementById('btn-reject').onclick = () => submitModal('reject');
+}
+function closeModal() { document.getElementById('modal-overlay').classList.add('hidden'); }
+function submitModal(action) {
+  const notes = document.getElementById('modal-notes').value;
+  const url = currentType === 'code'
+    ? `/solicitudes/codigo/${currentPk}/accion/`
+    : `/solicitudes/compra/${currentPk}/accion/`;
+  fetch(url, {
+    method: 'POST',
+    headers: {'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded'},
+    body: `action=${action}&admin_notes=${encodeURIComponent(notes)}`
+  }).then(r => r.json()).then(data => { if (data.success) { closeModal(); location.reload(); }});
+}
+</script>
+{% endblock %}

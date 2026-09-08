@@ -1,0 +1,242 @@
+﻿{% extends "base_solicitudes.html" %}
+{% block title %}Nuevo Código SAP | PESCO{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">📝 Solicitud de Creación de Código SAP</h1>
+    <p class="page-subtitle">Completa el formulario. El sistema calculará el correlativo automáticamente y notificará a Abastecimiento.</p>
+  </div>
+</div>
+
+<div class="form-card">
+  <div id="success-panel" class="success-panel">
+    <h3>✅ ¡Solicitud enviada exitosamente!</h3>
+    <p style="color:var(--muted);font-size:.9rem;">Se ha notificado a <strong>abastecimiento@pesco.cl</strong>. El equipo revisará tu solicitud y la aprobará o rechazará.</p>
+    <p style="margin-top:.5rem;color:var(--muted);font-size:.85rem;">ID de solicitud: <strong id="solicitud-id" style="color:var(--blue);">—</strong></p>
+    <button onclick="location.reload()" style="margin-top:1rem;padding:.5rem 1.2rem;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:.5rem;cursor:pointer;font-size:.85rem;">Crear otra solicitud</button>
+  </div>
+
+  <form id="form-codigo">
+    {% csrf_token %}
+    <div class="form-grid">
+
+      <!-- Nombre solicitante -->
+      <div class="form-group full">
+        <label class="form-label required">Tu Nombre / Área</label>
+        <input id="solicitante_nombre" name="solicitante_nombre" class="form-input" placeholder="Ej: Juan Pérez - Pañol EPP" required>
+      </div>
+
+      <!-- Búsqueda del código base -->
+      <div class="form-group full">
+        <label class="form-label">Código SAP de Referencia (para duplicar)</label>
+        <div class="autocomplete-box">
+          <input id="base-search" class="form-input" placeholder="Busca por código o descripción..." autocomplete="off">
+          <div id="autocomplete-results" class="autocomplete-results"></div>
+        </div>
+        <input type="hidden" id="base_sku_id" name="base_sku_id">
+        <div id="taxonomy-preview" class="taxonomy-preview">
+          Taxonomía base → Clase: <span id="prev-clase">—</span> / Familia: <span id="prev-familia">—</span> / SubFamilia: <span id="prev-subfamilia">—</span> / Categoría: <span id="prev-categoria">—</span>
+        </div>
+      </div>
+
+      <!-- Correlativo sugerido -->
+      <div class="form-group full">
+        <label class="form-label required">Código SAP Propuesto (Correlativo)</label>
+        <input id="generated_code" name="generated_code" class="form-input" placeholder="Se calculará automáticamente al elegir base, o ingresa manualmente" required>
+        <div id="correlative-preview" class="correlative-preview">
+          <div class="label">🔢 Siguiente correlativo detectado en el Maestro:</div>
+          <div class="value" id="correlative-value">—</div>
+        </div>
+      </div>
+
+      <!-- Descripción -->
+      <div class="form-group full">
+        <label class="form-label required">Descripción del Nuevo Artículo</label>
+        <input id="proposed_description" name="proposed_description" class="form-input" placeholder="Ej: GUANTE NITRILO TALLA L ANTIDESLIZANTE" required>
+      </div>
+
+      <!-- Justificación -->
+      <div class="form-group full">
+        <label class="form-label required">Motivo de la Creación</label>
+        <textarea id="justification" name="justification" class="form-textarea" placeholder="Ej: Se requiere para diferenciarlo del código ZM-1023 que es talla M. El proveedor solo tiene este en talla L." required></textarea>
+      </div>
+
+      <!-- Taxonomía propuesta (pre-llenada desde base) -->
+      <div class="form-group">
+        <label class="form-label">Clase Propuesta</label>
+        <input id="clase_propuesta" name="clase_propuesta" class="form-input" placeholder="Se copia del código base">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Familia Propuesta</label>
+        <input id="familia_propuesta" name="familia_propuesta" class="form-input" placeholder="Se copia del código base">
+      </div>
+      <div class="form-group">
+        <label class="form-label">SubFamilia Propuesta</label>
+        <input id="subfamilia_propuesta" name="subfamilia_propuesta" class="form-input" placeholder="Se copia del código base">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoría Propuesta</label>
+        <input id="categoria_propuesta" name="categoria_propuesta" class="form-input" placeholder="Opcional">
+      </div>
+    </div>
+
+    <!-- Asistente IA -->
+    <div class="ai-assistant-box">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+        <div>
+          <div style="font-size:.875rem;font-weight:700;color:#a78bfa;">✨ Asistente IA PESCO</div>
+          <div style="font-size:.78rem;color:var(--muted);margin-top:.15rem;">Gemini analizará tu descripción y sugerirá mejoras según el estándar del Maestro SAP.</div>
+        </div>
+        <button type="button" class="ai-btn" id="btn-ai" onclick="runAiAssistant()">✨ Mejorar con IA</button>
+      </div>
+      <div id="ai-result" class="ai-result">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.25rem;">
+          <span style="font-size:.78rem;color:var(--muted);font-weight:600;">Completitud estimada</span>
+          <span id="ai-score-text" style="font-size:.78rem;font-weight:700;color:var(--blue);">0%</span>
+        </div>
+        <div class="ai-score-bar"><div class="ai-score-fill" id="ai-score-fill" style="width:0%"></div></div>
+        <div style="margin-top:.75rem;">
+          <div style="font-size:.78rem;font-weight:700;color:#a78bfa;margin-bottom:.3rem;">Descripción mejorada:</div>
+          <div id="ai-desc-mejorada" style="font-size:.85rem;color:var(--text);background:#0f172a;border:1px solid var(--border);border-radius:.5rem;padding:.6rem .8rem;"></div>
+          <button type="button" class="apply-desc-btn" onclick="applyAiDesc()">✅ Usar esta descripción</button>
+        </div>
+        <div style="margin-top:.75rem;" id="ai-sugerencias-wrap">
+          <div style="font-size:.78rem;font-weight:700;color:var(--emerald);margin-bottom:.3rem;">💡 Sugerencias:</div>
+          <ul class="ai-suggestion-list" id="ai-sugerencias"></ul>
+        </div>
+        <div style="margin-top:.5rem;" id="ai-advertencias-wrap">
+          <div style="font-size:.78rem;font-weight:700;color:var(--amber);margin-bottom:.3rem;">⚠ Advertencias:</div>
+          <ul class="ai-suggestion-list ai-warning-list" id="ai-advertencias"></ul>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn-submit" id="btn-submit">📤 Enviar Solicitud de Creación</button>
+  </form>
+</div>
+
+<script>
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+let aiDescMejorada = '';
+
+// Autocompletado
+const searchInput = document.getElementById('base-search');
+const resultsBox = document.getElementById('autocomplete-results');
+let searchTimer;
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = searchInput.value.trim();
+  if (q.length < 2) { resultsBox.style.display = 'none'; return; }
+  searchTimer = setTimeout(() => {
+    fetch(`/api/buscar-skus/?q=${encodeURIComponent(q)}`)
+      .then(r => r.json())
+      .then(data => {
+        resultsBox.innerHTML = '';
+        if (!data.results.length) { resultsBox.style.display='none'; return; }
+        data.results.forEach(sku => {
+          const div = document.createElement('div');
+          div.className = 'autocomplete-item';
+          div.innerHTML = `<div class="code">${sku.item_code}</div><div class="name">${sku.item_name}</div>`;
+          div.onclick = () => selectSku(sku);
+          resultsBox.appendChild(div);
+        });
+        resultsBox.style.display = 'block';
+      });
+  }, 300);
+});
+
+document.addEventListener('click', e => { if (!e.target.closest('.autocomplete-box')) resultsBox.style.display='none'; });
+
+function selectSku(sku) {
+  searchInput.value = `${sku.item_code} - ${sku.item_name}`;
+  document.getElementById('base_sku_id').value = sku.id;
+  resultsBox.style.display = 'none';
+
+  // Prellenar taxonomía
+  document.getElementById('clase_propuesta').value = sku.clase || '';
+  document.getElementById('familia_propuesta').value = sku.familia || '';
+  document.getElementById('subfamilia_propuesta').value = sku.subfamilia || '';
+  document.getElementById('categoria_propuesta').value = sku.categoria || '';
+
+  // Mostrar preview taxonomía
+  document.getElementById('prev-clase').textContent = sku.clase || '—';
+  document.getElementById('prev-familia').textContent = sku.familia || '—';
+  document.getElementById('prev-subfamilia').textContent = sku.subfamilia || '—';
+  document.getElementById('prev-categoria').textContent = sku.categoria || '—';
+  document.getElementById('taxonomy-preview').style.display = 'block';
+
+  // Calcular correlativo
+  fetch(`/api/next-correlative/${encodeURIComponent(sku.item_code)}/`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        document.getElementById('generated_code').value = data.next_code;
+        document.getElementById('correlative-value').textContent = data.next_code;
+        document.getElementById('correlative-preview').style.display = 'block';
+      }
+    });
+}
+
+// Asistente IA
+function runAiAssistant() {
+  const desc = document.getElementById('proposed_description').value.trim();
+  const just = document.getElementById('justification').value.trim();
+  const baseName = searchInput.value.replace(/^[^-]+ - /, '').trim();
+  if (!desc) { alert('Ingresa primero la descripción del artículo.'); return; }
+
+  const btn = document.getElementById('btn-ai');
+  btn.disabled = true; btn.textContent = '⏳ Analizando...';
+
+  fetch('/api/ai-assistant/', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF},
+    body: JSON.stringify({descripcion: desc, justificacion: just, base_item_name: baseName, tipo: 'codigo'})
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false; btn.textContent = '✨ Mejorar con IA';
+    if (!data.success) { alert('Error en el asistente: ' + data.error); return; }
+
+    aiDescMejorada = data.descripcion_mejorada || '';
+    document.getElementById('ai-desc-mejorada').textContent = aiDescMejorada;
+
+    const score = data.completitud_score || 0;
+    document.getElementById('ai-score-text').textContent = score + '%';
+    document.getElementById('ai-score-fill').style.width = score + '%';
+
+    const sugList = document.getElementById('ai-sugerencias');
+    sugList.innerHTML = (data.sugerencias||[]).map(s=>`<li>💡 ${s}</li>`).join('');
+
+    const warnList = document.getElementById('ai-advertencias');
+    warnList.innerHTML = (data.advertencias||[]).map(w=>`<li>⚠ ${w}</li>`).join('');
+    document.getElementById('ai-advertencias-wrap').style.display = data.advertencias?.length ? 'block' : 'none';
+
+    document.getElementById('ai-result').style.display = 'block';
+  })
+  .catch(() => { btn.disabled = false; btn.textContent = '✨ Mejorar con IA'; alert('Error de conexión con el asistente IA.'); });
+}
+
+function applyAiDesc() {
+  if (aiDescMejorada) document.getElementById('proposed_description').value = aiDescMejorada;
+}
+
+// Envío del formulario
+document.getElementById('form-codigo').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true; btn.textContent = '⏳ Enviando...';
+  const fd = new FormData(e.target);
+  const res = await fetch('/solicitudes/nuevo-codigo/', {method:'POST', headers:{'X-CSRFToken':CSRF}, body: fd});
+  const data = await res.json();
+  btn.disabled = false; btn.textContent = '📤 Enviar Solicitud de Creación';
+  if (data.success) {
+    document.getElementById('form-codigo').style.display = 'none';
+    document.getElementById('solicitud-id').textContent = '#' + data.id;
+    document.getElementById('success-panel').style.display = 'block';
+  } else {
+    alert('Error al enviar: ' + (data.error || 'Desconocido'));
+  }
+});
+</script>
+{% endblock %}

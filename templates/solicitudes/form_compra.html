@@ -1,0 +1,205 @@
+﻿{% extends "base_solicitudes.html" %}
+{% block title %}Nueva Solicitud de Compra | PESCO{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">🛒 Solicitud de Compra</h1>
+    <p class="page-subtitle">Reemplaza el correo manual. Completa el formulario y el equipo de Abastecimiento lo recibirá al instante.</p>
+  </div>
+</div>
+
+<div class="form-card">
+  <div id="success-panel" class="success-panel">
+    <h3>✅ ¡Solicitud de compra enviada!</h3>
+    <p style="color:var(--muted);font-size:.9rem;">Notificación enviada a <strong>abastecimiento@pesco.cl</strong>.</p>
+    <p style="margin-top:.5rem;color:var(--muted);font-size:.85rem;">ID: <strong id="solicitud-id" style="color:var(--blue);">—</strong></p>
+    <button onclick="location.reload()" style="margin-top:1rem;padding:.5rem 1.2rem;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:.5rem;cursor:pointer;font-size:.85rem;">Nueva solicitud</button>
+  </div>
+
+  <form id="form-compra">
+    {% csrf_token %}
+    <div class="form-grid">
+
+      <div class="form-group full">
+        <label class="form-label required">Tu Nombre / Área</label>
+        <input id="solicitante_nombre" name="solicitante_nombre" class="form-input" placeholder="Ej: María González - Compras Nacionales" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Proveedor</label>
+        <input id="proveedor" name="proveedor" class="form-input" placeholder="Ej: Ferretería El Tornillo S.A.">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Código SAP (si ya existe)</label>
+        <div class="autocomplete-box">
+          <input id="codigo-search" class="form-input" placeholder="Busca por código SAP..." autocomplete="off">
+          <div id="autocomplete-results-compra" class="autocomplete-results"></div>
+        </div>
+        <input type="hidden" id="codigo_compra" name="codigo_compra">
+      </div>
+
+      <div class="form-group full">
+        <label class="form-label required">Descripción del Artículo</label>
+        <input id="descripcion" name="descripcion" class="form-input" placeholder="Ej: CASCO SEGURIDAD TIPO I BLANCO TALLA ÚNICA" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label required">Cantidad Solicitada</label>
+        <input id="cantidad_solicitada" name="cantidad_solicitada" class="form-input" type="number" min="0" step="0.01" placeholder="0" required oninput="calcTotal()">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label required">Costo Unitario ($)</label>
+        <input id="costo_unitario" name="costo_unitario" class="form-input" type="number" min="0" step="0.01" placeholder="0.00" required oninput="calcTotal()">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Costo Total ($) — Calculado automáticamente</label>
+        <input id="costo_total_display" class="form-input" readonly style="background:#0a1224;color:var(--blue);font-weight:700;font-size:1.05rem;" placeholder="$0">
+        <input type="hidden" id="costo_total" name="costo_total" value="0">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label required">Tipo de Compra</label>
+        <select id="tipo_compra" name="tipo_compra" class="form-select">
+          <option value="stock">Stock</option>
+          <option value="calzada">Calzada</option>
+        </select>
+      </div>
+
+      <div class="form-group full">
+        <label class="form-label">Justificación / Observaciones</label>
+        <textarea id="justification" name="justification" class="form-textarea" placeholder="Ej: Reposición de stock agotado en pañol. Necesario para faena semana del 15."></textarea>
+      </div>
+    </div>
+
+    <!-- Asistente IA -->
+    <div class="ai-assistant-box">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+        <div>
+          <div style="font-size:.875rem;font-weight:700;color:#a78bfa;">✨ Asistente IA PESCO</div>
+          <div style="font-size:.78rem;color:var(--muted);margin-top:.15rem;">Gemini analizará tu solicitud y te indicará si falta información crítica para procesar la compra.</div>
+        </div>
+        <button type="button" class="ai-btn" id="btn-ai" onclick="runAiAssistant()">✨ Analizar con IA</button>
+      </div>
+      <div id="ai-result" class="ai-result">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.25rem;">
+          <span style="font-size:.78rem;color:var(--muted);font-weight:600;">Completitud de la solicitud</span>
+          <span id="ai-score-text" style="font-size:.78rem;font-weight:700;color:var(--blue);">0%</span>
+        </div>
+        <div class="ai-score-bar"><div class="ai-score-fill" id="ai-score-fill" style="width:0%"></div></div>
+        <div style="margin-top:.75rem;">
+          <div style="font-size:.78rem;font-weight:700;color:#a78bfa;margin-bottom:.3rem;">Descripción mejorada sugerida:</div>
+          <div id="ai-desc-mejorada" style="font-size:.85rem;color:var(--text);background:#0f172a;border:1px solid var(--border);border-radius:.5rem;padding:.6rem .8rem;"></div>
+          <button type="button" class="apply-desc-btn" onclick="applyAiDesc()">✅ Usar esta descripción</button>
+        </div>
+        <div style="margin-top:.75rem;">
+          <div style="font-size:.78rem;font-weight:700;color:var(--emerald);margin-bottom:.3rem;">💡 Sugerencias:</div>
+          <ul class="ai-suggestion-list" id="ai-sugerencias"></ul>
+        </div>
+        <div style="margin-top:.5rem;" id="ai-advertencias-wrap">
+          <div style="font-size:.78rem;font-weight:700;color:var(--amber);margin-bottom:.3rem;">⚠ Advertencias:</div>
+          <ul class="ai-suggestion-list ai-warning-list" id="ai-advertencias"></ul>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn-submit" id="btn-submit">📤 Enviar Solicitud de Compra</button>
+  </form>
+</div>
+
+<script>
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+let aiDescMejorada = '';
+
+function calcTotal() {
+  const cant = parseFloat(document.getElementById('cantidad_solicitada').value) || 0;
+  const cu = parseFloat(document.getElementById('costo_unitario').value) || 0;
+  const total = cant * cu;
+  document.getElementById('costo_total').value = total.toFixed(2);
+  document.getElementById('costo_total_display').value = '$' + total.toLocaleString('es-CL', {minimumFractionDigits:0});
+}
+
+// Autocompletado de código SAP
+const codeSearch = document.getElementById('codigo-search');
+const codeResults = document.getElementById('autocomplete-results-compra');
+let timer2;
+codeSearch.addEventListener('input', () => {
+  clearTimeout(timer2);
+  const q = codeSearch.value.trim();
+  if (q.length < 2) { codeResults.style.display='none'; return; }
+  timer2 = setTimeout(() => {
+    fetch(`/api/buscar-skus/?q=${encodeURIComponent(q)}`)
+      .then(r => r.json())
+      .then(data => {
+        codeResults.innerHTML = '';
+        if (!data.results.length) { codeResults.style.display='none'; return; }
+        data.results.forEach(sku => {
+          const div = document.createElement('div');
+          div.className = 'autocomplete-item';
+          div.innerHTML = `<div class="code">${sku.item_code}</div><div class="name">${sku.item_name}</div>`;
+          div.onclick = () => {
+            codeSearch.value = sku.item_code;
+            document.getElementById('codigo_compra').value = sku.item_code;
+            if (!document.getElementById('descripcion').value)
+              document.getElementById('descripcion').value = sku.item_name;
+            codeResults.style.display = 'none';
+          };
+          codeResults.appendChild(div);
+        });
+        codeResults.style.display='block';
+      });
+  }, 300);
+});
+document.addEventListener('click', e => { if(!e.target.closest('.autocomplete-box')) codeResults.style.display='none'; });
+
+// Asistente IA
+function runAiAssistant() {
+  const desc = document.getElementById('descripcion').value.trim();
+  const just = document.getElementById('justification').value.trim();
+  if (!desc) { alert('Ingresa primero la descripción del artículo.'); return; }
+  const btn = document.getElementById('btn-ai');
+  btn.disabled = true; btn.textContent = '⏳ Analizando...';
+  fetch('/api/ai-assistant/', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+    body: JSON.stringify({descripcion: desc, justificacion: just, tipo: 'compra'})
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false; btn.textContent = '✨ Analizar con IA';
+    if (!data.success) { alert('Error IA: ' + data.error); return; }
+    aiDescMejorada = data.descripcion_mejorada || '';
+    document.getElementById('ai-desc-mejorada').textContent = aiDescMejorada;
+    const score = data.completitud_score || 0;
+    document.getElementById('ai-score-text').textContent = score + '%';
+    document.getElementById('ai-score-fill').style.width = score + '%';
+    document.getElementById('ai-sugerencias').innerHTML = (data.sugerencias||[]).map(s=>`<li>💡 ${s}</li>`).join('');
+    document.getElementById('ai-advertencias').innerHTML = (data.advertencias||[]).map(w=>`<li>⚠ ${w}</li>`).join('');
+    document.getElementById('ai-advertencias-wrap').style.display = data.advertencias?.length ? 'block' : 'none';
+    document.getElementById('ai-result').style.display = 'block';
+  })
+  .catch(() => { btn.disabled = false; btn.textContent = '✨ Analizar con IA'; });
+}
+function applyAiDesc() { if(aiDescMejorada) document.getElementById('descripcion').value = aiDescMejorada; }
+
+// Envío
+document.getElementById('form-compra').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true; btn.textContent = '⏳ Enviando...';
+  const fd = new FormData(e.target);
+  const res = await fetch('/solicitudes/nueva-compra/', {method:'POST', headers:{'X-CSRFToken':CSRF}, body: fd});
+  const data = await res.json();
+  btn.disabled = false; btn.textContent = '📤 Enviar Solicitud de Compra';
+  if (data.success) {
+    document.getElementById('form-compra').style.display = 'none';
+    document.getElementById('solicitud-id').textContent = '#' + data.id;
+    document.getElementById('success-panel').style.display = 'block';
+  } else {
+    alert('Error: ' + (data.error || 'Desconocido'));
+  }
+});
+</script>
+{% endblock %}

@@ -43,3 +43,79 @@ class SKUItem(models.Model):
 
     def __str__(self):
         return f"{self.item_code} - {self.item_name}"
+
+
+class CodeCreationRequest(models.Model):
+    """Solicitud de creación de nuevo código SAP."""
+    STATUS_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('aprobado', 'Aprobado'),
+        ('rechazado', 'Rechazado'),
+    ]
+
+    base_sku = models.ForeignKey(
+        SKUItem, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='creation_requests', help_text="Código SAP de referencia para duplicar."
+    )
+    generated_code = models.CharField(
+        max_length=50, blank=True, null=True,
+        help_text="Código correlativo sugerido por el sistema."
+    )
+    solicitante_nombre = models.CharField(max_length=150, help_text="Nombre real o área del solicitante.")
+    proposed_description = models.TextField(help_text="Descripción del nuevo ítem (mejorada con IA).")
+    justification = models.TextField(help_text="Motivo de la creación del nuevo código.")
+
+    # Campos de taxonomía propuestos para el nuevo SKU
+    clase_propuesta = models.CharField(max_length=100, blank=True, null=True)
+    familia_propuesta = models.CharField(max_length=100, blank=True, null=True)
+    subfamilia_propuesta = models.CharField(max_length=100, blank=True, null=True)
+    categoria_propuesta = models.CharField(max_length=100, blank=True, null=True)
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendiente', db_index=True)
+    admin_notes = models.TextField(blank=True, null=True, help_text="Notas del administrador al aprobar/rechazar.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Solicitud de Creación de Código"
+        verbose_name_plural = "Solicitudes de Creación de Códigos"
+
+    def __str__(self):
+        return f"[{self.get_status_display()}] {self.generated_code or 'S/N'} - {self.solicitante_nombre}"
+
+
+class PurchaseRequest(models.Model):
+    """Solicitud de compra (reemplaza el flujo de correos)."""
+    STATUS_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('aprobado', 'Aprobado'),
+        ('rechazado', 'Rechazado'),
+    ]
+    TIPO_CHOICES = [
+        ('stock', 'Stock'),
+        ('calzada', 'Calzada'),
+    ]
+
+    solicitante_nombre = models.CharField(max_length=150)
+    proveedor = models.CharField(max_length=200, blank=True, null=True)
+    codigo_compra = models.CharField(max_length=50, blank=True, null=True, help_text="Código SAP del artículo a comprar.")
+    descripcion = models.TextField()
+    cantidad_solicitada = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    costo_unitario = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tipo_compra = models.CharField(max_length=10, choices=TIPO_CHOICES, default='stock')
+    justification = models.TextField(blank=True, null=True)
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendiente', db_index=True)
+    admin_notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Solicitud de Compra"
+        verbose_name_plural = "Solicitudes de Compra"
+
+    def __str__(self):
+        return f"[{self.get_status_display()}] {self.codigo_compra or 'S/C'} - {self.descripcion[:50]}"
