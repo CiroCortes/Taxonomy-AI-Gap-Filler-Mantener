@@ -599,8 +599,20 @@ textarea:focus { outline: none; border-color: var(--blue); }
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.15);
 }
-.form-select option { background: var(--card); color: var(--text); }
 .form-textarea { resize: vertical; min-height: 85px; }
+.form-input-readonly {
+  background: var(--bg-subtle) !important;
+  color: #0077b6 !important;
+  font-weight: 800 !important;
+  font-size: 1.15rem !important;
+  border-color: var(--border-strong) !important;
+  cursor: default;
+}
+[data-theme="dark"] .form-input-readonly {
+  background: #0c1826 !important;
+  color: var(--blue) !important;
+  border-color: var(--border) !important;
+}
 
 /* Autocomplete */
 .autocomplete-box { position: relative; }
