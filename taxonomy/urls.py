@@ -33,4 +33,9 @@ urlpatterns = [
     path('api/next-correlative/<str:base_sku_code>/', views_solicitudes.api_next_correlative, name='api_next_correlative'),
     path('api/buscar-skus/', views_solicitudes.api_buscar_skus, name='api_buscar_skus'),
     path('api/ai-assistant/', views_solicitudes.api_ai_assistant, name='api_ai_assistant'),
+
+    # ─── Carga Masiva y Bandeja de Solicitudes ─────────────────────────────────
+    path('api/masivo/cargar-excel/<str:tipo>/', views_solicitudes.api_parse_excel_batch, name='api_parse_excel_batch'),
+    path('api/masivo/descargar-plantilla/<str:tipo>/', views_solicitudes.api_descargar_plantilla, name='api_descargar_plantilla'),
+    path('api/masivo/procesar-lote/', views_solicitudes.api_procesar_lote_masivo, name='api_procesar_lote_masivo'),
 ]

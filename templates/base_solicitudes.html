@@ -741,6 +741,13 @@ textarea:focus { outline: none; border-color: var(--blue); }
   display: none;
 }
 .taxonomy-preview span { color: var(--text-heading); font-weight: 600; }
+
+.nav-link.batch-btn { background: rgba(0, 180, 216, 0.25); color: #fff; border: 1px solid rgba(0, 180, 216, 0.5); cursor: pointer; font-weight: 700; }
+.nav-link.batch-btn:hover { background: #00B4D8; color: #fff; }
+.batch-badge { background: #ef4444; color: white; font-size: 0.72rem; font-weight: 800; padding: 0.15rem 0.5rem; border-radius: 9999px; margin-left: 0.3rem; }
+.drag-drop-card { background: rgba(30, 41, 59, 0.4); border: 2px dashed rgba(0, 180, 216, 0.4); border-radius: .75rem; padding: 1.25rem; text-align: center; margin-bottom: 1.25rem; transition: all .2s; }
+.drag-drop-card.dragover { border-color: #00B4D8; background: rgba(0, 180, 216, 0.12); }
+
 </style>
 {% block extra_css %}{% endblock %}
 </head>
@@ -757,7 +764,10 @@ textarea:focus { outline: none; border-color: var(--blue); }
     </div>
   </a>
 
-  <nav class="nav-links">
+      <nav class="nav-links">
+      <button type="button" class="nav-link batch-btn" onclick="openBatchDrawer()" title="Ver Bandeja de Carga Masiva (Lote)">
+        📋 Bandeja Masiva <span class="batch-badge" id="batch-count-badge">0</span>
+      </button>
     <a href="{% url 'taxonomy:solicitudes_nueva_codigo' %}" class="nav-link {% if request.resolver_match.url_name == 'solicitudes_nueva_codigo' %}active{% endif %}">
       📝 Nuevo Código
     </a>
@@ -821,5 +831,237 @@ textarea:focus { outline: none; border-color: var(--blue); }
   });
 </script>
 {% block extra_js %}{% endblock %}
+
+<!-- ══ BANDEJA DE CARGA MASIVA (DRAWER / MODAL) ══ -->
+<div id="drawer-lote-masivo-overlay" class="modal-overlay hidden" style="z-index:1100;">
+  <div class="modal-box modal-large" style="max-width:980px !important;">
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title" style="margin:0;font-size:1.15rem;color:var(--text);display:flex;align-items:center;gap:.5rem;">
+          📋 Bandeja de Carga Masiva (Lote de Solicitudes)
+          <span id="drawer-batch-badge" class="badge-status badge-aprobado" style="font-size:.75rem;">0 ítems</span>
+        </h3>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:.2rem;">
+          Pre-solicitudes encoladas para envío masivo unificado a Abastecimiento.
+        </div>
+      </div>
+      <button type="button" class="btn-close-modal" onclick="closeBatchDrawer()" title="Cerrar bandeja">✕</button>
+    </div>
+
+    <div class="scrollable-body" style="max-height:calc(85vh - 130px);padding:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <span class="lbl">Tipo de Lote:</span>
+          <select id="batch-type-select" class="form-select" style="padding:.35rem .6rem;font-size:.82rem;" onchange="PescoBatchManager.setTipo(this.value)">
+            <option value="codigo">📝 Creación de Códigos SAP</option>
+            <option value="compra">🛒 Solicitudes de Compra</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:.5rem;">
+          <button type="button" class="btn-modal cancel" style="padding:.35rem .75rem;font-size:.78rem;" onclick="PescoBatchManager.clearBatch()">🧹 Limpiar Lote</button>
+          <a id="btn-descargar-plantilla-link" href="/api/masivo/descargar-plantilla/codigo/" target="_blank" class="file-download-btn" style="padding:.35rem .75rem;font-size:.78rem;">📥 Plantilla Excel (.xlsx)</a>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="border:1px solid var(--border);border-radius:.6rem;overflow-x:auto;">
+        <table style="width:100%;font-size:.83rem;" id="table-batch-items">
+          <thead>
+            <tr id="table-batch-header"></tr>
+          </thead>
+          <tbody id="tbody-batch-items"></tbody>
+        </table>
+      </div>
+
+      <div id="batch-empty-msg" class="empty-state" style="padding:2rem 1rem;display:none;">
+        No hay ítems en la Bandeja Masiva. Agrega ítems desde los formularios o carga un archivo Excel.
+      </div>
+    </div>
+
+    <div class="modal-footer-fixed" style="padding:1rem 1.25rem;">
+      <div style="display:flex;align-items:center;gap:1rem;width:100%;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:.5rem;">
+          <span class="lbl">Solicitante:</span>
+          <input id="batch-solicitante-input" type="text" class="form-input" style="padding:.4rem .7rem;font-size:.85rem;width:180px;" placeholder="Tu Nombre / Área" value="{{ user.username }}">
+        </div>
+        <div style="display:flex;gap:.5rem;">
+          <button type="button" class="btn-modal cancel" onclick="closeBatchDrawer()">Cerrar</button>
+          <button type="button" class="btn-modal approve" id="btn-process-batch" onclick="PescoBatchManager.submitBatch()">📤 Confirmar y Procesar Lote (0 ítems)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PescoBatchManager = {
+  getStorageKey: () => 'pesco_batch_items',
+  getTipoKey: () => 'pesco_batch_tipo',
+
+  getTipo: function() {
+    return localStorage.getItem(this.getTipoKey()) || 'codigo';
+  },
+  setTipo: function(tipo) {
+    localStorage.setItem(this.getTipoKey(), tipo);
+    const link = document.getElementById('btn-descargar-plantilla-link');
+    if (link) link.href = `/api/masivo/descargar-plantilla/${tipo}/`;
+    const sel = document.getElementById('batch-type-select');
+    if (sel) sel.value = tipo;
+    this.render();
+  },
+
+  getItems: function() {
+    try {
+      return JSON.parse(localStorage.getItem(this.getStorageKey()) || '[]');
+    } catch(e) { return []; }
+  },
+
+  setItems: function(items) {
+    localStorage.setItem(this.getStorageKey(), JSON.stringify(items));
+    this.updateBadges();
+  },
+
+  addItem: function(item) {
+    const items = this.getItems();
+    items.push(item);
+    this.setItems(items);
+    this.render();
+  },
+
+  addItems: function(newItems) {
+    const items = this.getItems();
+    items.push(...newItems);
+    this.setItems(items);
+    this.render();
+  },
+
+  removeItem: function(index) {
+    const items = this.getItems();
+    items.splice(index, 1);
+    this.setItems(items);
+    this.render();
+  },
+
+  clearBatch: function() {
+    if (this.getItems().length === 0) return;
+    if (!confirm('¿Deseas limpiar todos los ítems de la Bandeja Masiva?')) return;
+    this.setItems([]);
+    this.render();
+  },
+
+  updateBadges: function() {
+    const count = this.getItems().length;
+    const badge = document.getElementById('batch-count-badge');
+    if (badge) badge.textContent = count;
+    const drawerBadge = document.getElementById('drawer-batch-badge');
+    if (drawerBadge) drawerBadge.textContent = `${count} ítems`;
+    const procBtn = document.getElementById('btn-process-batch');
+    if (procBtn) {
+      procBtn.textContent = `📤 Confirmar y Procesar Lote (${count} ítems)`;
+      procBtn.disabled = count === 0;
+    }
+  },
+
+  render: function() {
+    this.updateBadges();
+    const items = this.getItems();
+    const tipo = this.getTipo();
+
+    const thead = document.getElementById('table-batch-header');
+    const tbody = document.getElementById('tbody-batch-items');
+    const emptyMsg = document.getElementById('batch-empty-msg');
+    const tableWrap = document.getElementById('table-batch-items');
+
+    if (!thead || !tbody) return;
+
+    if (items.length === 0) {
+      if (emptyMsg) emptyMsg.style.display = 'block';
+      if (tableWrap) tableWrap.style.display = 'none';
+      return;
+    }
+
+    if (emptyMsg) emptyMsg.style.display = 'none';
+    if (tableWrap) tableWrap.style.display = 'table';
+
+    if (tipo === 'codigo') {
+      thead.innerHTML = `<th>#</th><th>Descripción</th><th>Grupo</th><th>Cod. Sugerido</th><th>Proveedor</th><th>Empaque</th><th>Acciones</th>`;
+      tbody.innerHTML = items.map((it, idx) => `
+        <tr>
+          <td><strong>#${idx+1}</strong></td>
+          <td><strong>${it.proposed_description || '—'}</strong></td>
+          <td>${it.grupo_material || '—'}</td>
+          <td><code class="code-chip">${it.generated_code || 'Pendiente'}</code></td>
+          <td>${it.proveedor_nombre || '—'}</td>
+          <td>${it.unidad_empaque || '1 UN'}</td>
+          <td><button type="button" class="btn-action reject" onclick="PescoBatchManager.removeItem(${idx})" title="Quitar del lote">🗑️</button></td>
+        </tr>
+      `).join('');
+    } else {
+      thead.innerHTML = `<th>#</th><th>Código SAP</th><th>Descripción</th><th>Cantidad</th><th>Costo Unit.</th><th>Proveedor</th><th>Acciones</th>`;
+      tbody.innerHTML = items.map((it, idx) => `
+        <tr>
+          <td><strong>#${idx+1}</strong></td>
+          <td><code class="code-chip">${it.codigo_compra || 'S/C'}</code></td>
+          <td><strong>${it.descripcion || '—'}</strong></td>
+          <td>${it.cantidad_solicitada || 1} un.</td>
+          <td>$${it.costo_unitario || 0}</td>
+          <td>${it.proveedor || '—'}</td>
+          <td><button type="button" class="btn-action reject" onclick="PescoBatchManager.removeItem(${idx})" title="Quitar del lote">🗑️</button></td>
+        </tr>
+      `).join('');
+    }
+  },
+
+  submitBatch: async function() {
+    const items = this.getItems();
+    if (items.length === 0) { alert('La Bandeja Masiva está vacía.'); return; }
+
+    const solicitante = document.getElementById('batch-solicitante-input').value.trim() || 'Usuario';
+    const tipo = this.getTipo();
+
+    if (!confirm(`¿Confirmas enviar el LOTE MASIVO de ${items.length} solicitudes a Abastecimiento?`)) return;
+
+    const btn = document.getElementById('btn-process-batch');
+    btn.disabled = true; btn.textContent = '⏳ Procesando Lote...';
+
+    try {
+      const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+      const res = await fetch('/api/masivo/procesar-lote/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+        body: JSON.stringify({ solicitante_nombre: solicitante, tipo: tipo, items: items })
+      });
+      const data = await res.json();
+      btn.disabled = false;
+
+      if (data.success) {
+        alert(`✅ ${data.message}
+Se envió notificación por correo a Abastecimiento.`);
+        this.setItems([]);
+        closeBatchDrawer();
+        window.location.href = '/solicitudes/';
+      } else {
+        alert('Error al procesar lote: ' + (data.error || 'Desconocido'));
+        this.updateBadges();
+      }
+    } catch(err) {
+      btn.disabled = false; this.updateBadges();
+      alert('Error de conexión al procesar lote masivo.');
+    }
+  }
+};
+
+function openBatchDrawer() {
+  PescoBatchManager.setTipo(PescoBatchManager.getTipo());
+  document.getElementById('drawer-lote-masivo-overlay').classList.remove('hidden');
+}
+function closeBatchDrawer() {
+  document.getElementById('drawer-lote-masivo-overlay').classList.add('hidden');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  PescoBatchManager.updateBadges();
+});
+</script>
+
 </body>
 </html>

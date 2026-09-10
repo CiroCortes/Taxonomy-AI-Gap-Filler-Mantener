@@ -6,13 +6,19 @@ Modulo de Solicitudes: Login, Creacion de Codigos y Compras.
 import json
 import re
 import os
+import io
+import uuid
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from django.core.mail import send_mail
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from decimal import Decimal
 from google import genai
@@ -648,4 +654,344 @@ Responde SOLO en JSON sin texto adicional:
         return JsonResponse({'success': True, **result})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── BANDEJA DE CARGA MASIVA & IMPORTACIÓN EXCEL (ARQUITECTURA SENIOR) ──────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+def api_descargar_plantilla(request, tipo):
+    """
+    Genera y retorna un archivo Excel (.xlsx) oficial de PESCO como plantilla descargable.
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+
+    # Dark header fill & styles PESCO
+    header_fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
+    header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    if tipo == 'codigo':
+        ws.title = "Carga Masiva Codigos"
+        headers = [
+            "DESCRIPCION", "GRUPO_MATERIAL", "PROVEEDOR", "COD_CATALOGO_PROVEEDOR",
+            "UNIDAD_EMPAQUE", "LOTE_MINIMO", "PRECIO_REFERENCIAL", "ES_IMPORTADO",
+            "MOTIVO_JUSTIFICACION", "ESPECIFICACIONES_TECNICAS"
+        ]
+        sample_rows = [
+            [
+                "GRUA ARTICULADA ING 8500C 3H KM", "EQUIPOS IZAJE", "ING Cranes", "ING-8500C-KM",
+                "1 UN", 1, 45000, "SI", "Alta masiva equipos mineros proyecto 2026",
+                "Grúa articulada capacidad 8.5 ton con kit minero completo."
+            ],
+            [
+                "BASURERO PAPELERO CON PEDAL 5L ACERO INOXIDABLE", "PESCO AMBULANCIAS", "Inversiones J&A", "MKRI57L805-1",
+                "1 UN", 1, 15000, "NO", "Equipamiento para ambulancias de rescate",
+                "Basurero acero inox 202 con pedal reforzado."
+            ]
+        ]
+        filename = "Plantilla_Carga_Masiva_Codigos_PESCO.xlsx"
+    else:
+        ws.title = "Carga Masiva Compras"
+        headers = [
+            "CODIGO_SAP", "DESCRIPCION", "CANTIDAD", "COSTO_UNITARIO",
+            "PROVEEDOR", "TIPO_COMPRA", "JUSTIFICACION"
+        ]
+        sample_rows = [
+            [
+                "13171071", "GRUA ARTICULADA ING 8500C 3H KM", 2, 45000,
+                "ING Cranes", "Stock", "Compra masiva para stock pañol central"
+            ],
+            [
+                "20701539", "PAPELERO AC.INOX 3 LTS C/PEDAL", 10, 12000,
+                "Inversiones J&A", "Calzada", "Compra calzada para orden de trabajo OF-2607813"
+            ]
+        ]
+        filename = "Plantilla_Carga_Masiva_Compras_PESCO.xlsx"
+
+    ws.append(headers)
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_align
+
+    for r in sample_rows:
+        ws.append(r)
+
+    ws.row_dimensions[1].height = 28
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 16)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@require_POST
+def api_parse_excel_batch(request, tipo):
+    """
+    Parsea una planilla Excel (.xlsx) subida por el usuario y retorna el listado de ítems
+    validados y enriquecidos para la Bandeja Masiva.
+    """
+    excel_file = request.FILES.get('excel_file')
+    if not excel_file:
+        return JsonResponse({'success': False, 'error': 'No se adjuntó archivo Excel.'}, status=400)
+
+    try:
+        wb = openpyxl.load_workbook(excel_file, data_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+
+        if not rows or len(rows) < 2:
+            return JsonResponse({'success': False, 'error': 'El archivo Excel está vacío o no contiene filas de datos.'}, status=400)
+
+        # Header normalization
+        raw_headers = [str(cell).strip().upper() if cell is not None else '' for cell in rows[0]]
+        header_map = {}
+        for idx, h in enumerate(raw_headers):
+            if h:
+                header_map[h] = idx
+
+        items = []
+        for r_idx, row in enumerate(rows[1:], start=2):
+            if not any(row):
+                continue
+
+            def get_val(key_list, default=''):
+                for k in key_list:
+                    if k in header_map and header_map[k] < len(row):
+                        v = row[header_map[k]]
+                        if v is not None:
+                            return str(v).strip()
+                return default
+
+            if tipo == 'codigo':
+                desc = get_val(['DESCRIPCION', 'DESCRIPCION_ARTICULO', 'ITEM_NAME', 'NOMBRE'])
+                if not desc:
+                    continue
+
+                grupo = get_val(['GRUPO_MATERIAL', 'GRUPO', 'AREA', 'NOMBRE_GRUPO'])
+                proveedor = get_val(['PROVEEDOR', 'NOMBRE_PROVEEDOR', 'PROVEEDOR_NOMBRE'])
+                cod_cat = get_val(['COD_CATALOGO_PROVEEDOR', 'CODIGO_CATALOGO_PROVEEDOR', 'COD_CATALOGO', 'CATALOGO'])
+                empaque = get_val(['UNIDAD_EMPAQUE', 'EMPAQUE', 'UNIDAD'])
+                lote_raw = get_val(['LOTE_MINIMO', 'LOTE_MIN', 'LOTE'])
+                precio_raw = get_val(['PRECIO_REFERENCIAL', 'PRECIO_REF', 'PRECIO', 'COSTO'])
+                importado_raw = get_val(['ES_IMPORTADO', 'IMPORTADO', 'INTERNACIONAL']).upper()
+                just = get_val(['MOTIVO_JUSTIFICACION', 'JUSTIFICACION', 'MOTIVO'])
+                ficha = get_val(['ESPECIFICACIONES_TECNICAS', 'FICHA_TECNICA', 'ESPECIFICACIONES'])
+
+                es_importado = importado_raw in ('SI', 'SÍ', 'TRUE', '1', 'YES')
+
+                # Trazar correlativo / sugerencia si aplica
+                generated_code = ""
+                base_sku_code = ""
+                if desc:
+                    keywords = [w for w in desc.split() if len(w) > 3][:2]
+                    q_kw = Q()
+                    for kw in keywords:
+                        q_kw |= Q(item_name__icontains=kw)
+                    candidate = SKUItem.objects.filter(q_kw).first()
+                    if candidate:
+                        base_sku_code = candidate.item_code
+                        m = re.match(r'^([A-Za-z\-_\.]+)(\d+)$', candidate.item_code)
+                        if not m:
+                            m = re.match(r'^(\d{1,6})(\d{4,})$', candidate.item_code)
+                        if m:
+                            prefix = m.group(1)
+                            num_part = m.group(2)
+                            num_len = len(num_part)
+                            similar = SKUItem.objects.filter(item_code__startswith=prefix)
+                            max_n = 0
+                            for s in similar:
+                                m2 = re.match(rf'^{re.escape(prefix)}(\d+)$', s.item_code.strip())
+                                if m2 and int(m2.group(1)) > max_n:
+                                    max_n = int(m2.group(1))
+                            generated_code = f"{prefix}{str(max_n + 1).zfill(num_len)}"
+
+                items.append({
+                    'tipo': 'codigo',
+                    'proposed_description': desc,
+                    'grupo_material': grupo,
+                    'generated_code': generated_code,
+                    'base_sku_code': base_sku_code,
+                    'proveedor_nombre': proveedor,
+                    'codigo_catalogo_proveedor': cod_cat,
+                    'unidad_empaque': empaque,
+                    'lote_minimo': lote_raw,
+                    'precio_referencial': precio_raw,
+                    'es_importado': es_importado,
+                    'justification': just,
+                    'ficha_tecnica': ficha,
+                })
+            else: # tipo == 'compra'
+                desc = get_val(['DESCRIPCION', 'DESCRIPCION_ARTICULO', 'ITEM_NAME'])
+                cod_compra = get_val(['CODIGO_SAP', 'CODIGO_COMPRA', 'CODIGO_ITEM', 'SKU'])
+                if not desc and not cod_compra:
+                    continue
+
+                cant_raw = get_val(['CANTIDAD', 'CANTIDAD_SOLICITADA', 'CANT'], '1')
+                cu_raw = get_val(['COSTO_UNITARIO', 'COSTO_UNIT', 'PRECIO_UNITARIO'], '0')
+                prov = get_val(['PROVEEDOR', 'NOMBRE_PROVEEDOR'])
+                tipo_c = get_val(['TIPO_COMPRA', 'TIPO'], 'stock').lower()
+                just = get_val(['JUSTIFICACION', 'MOTIVO'])
+
+                if tipo_c not in ('stock', 'calzada'):
+                    tipo_c = 'stock'
+
+                items.append({
+                    'tipo': 'compra',
+                    'codigo_compra': cod_compra,
+                    'descripcion': desc or f"Compra artículo {cod_compra}",
+                    'cantidad_solicitada': cant_raw,
+                    'costo_unitario': cu_raw,
+                    'proveedor': prov,
+                    'tipo_compra': tipo_c,
+                    'justification': just,
+                })
+
+        return JsonResponse({'success': True, 'items': items, 'total': len(items)})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f"Error al leer el archivo Excel: {str(e)}"}, status=400)
+
+
+@require_POST
+def api_procesar_lote_masivo(request):
+    """
+    Procesa de forma atómica (transaccional) la lista completa de ítems de la Bandeja Masiva.
+    """
+    try:
+        body = json.loads(request.body)
+        solicitante = body.get('solicitante_nombre', '').strip() or 'Usuario Sistema'
+        tipo = body.get('tipo', 'codigo')
+        items = body.get('items', [])
+
+        if not items:
+            return JsonResponse({'success': False, 'error': 'El lote de la bandeja está vacío.'}, status=400)
+
+        lote_id = f"LOTE-{uuid.uuid4().hex[:8].upper()}"
+        created_records = []
+
+        with transaction.atomic():
+            if tipo == 'codigo':
+                for it in items:
+                    desc = str(it.get('proposed_description', '')).strip()
+                    if not desc:
+                        continue
+                    precio_ref = None
+                    p_raw = str(it.get('precio_referencial', '')).strip()
+                    if p_raw:
+                        try: precio_ref = Decimal(p_raw)
+                        except Exception: pass
+
+                    lote_min = None
+                    l_raw = str(it.get('lote_minimo', '')).strip()
+                    if l_raw:
+                        try: lote_min = int(l_raw)
+                        except Exception: pass
+
+                    code_gen = str(it.get('generated_code', '')).strip() or None
+
+                    rec = CodeCreationRequest.objects.create(
+                        solicitante_nombre=solicitante,
+                        grupo_material=str(it.get('grupo_material', '')).strip() or None,
+                        generated_code=code_gen,
+                        proposed_description=desc,
+                        justification=str(it.get('justification', '')).strip() or "Carga masiva en lote",
+                        proveedor_nombre=str(it.get('proveedor_nombre', '')).strip() or None,
+                        codigo_catalogo_proveedor=str(it.get('codigo_catalogo_proveedor', '')).strip() or None,
+                        unidad_empaque=str(it.get('unidad_empaque', '')).strip() or None,
+                        lote_minimo=lote_min,
+                        precio_referencial=precio_ref,
+                        es_importado=bool(it.get('es_importado')),
+                        ficha_tecnica=str(it.get('ficha_tecnica', '')).strip() or None,
+                        lote_id=lote_id,
+                        status='pendiente'
+                    )
+                    created_records.append(rec)
+            else: # tipo == 'compra'
+                for it in items:
+                    desc = str(it.get('descripcion', '')).strip()
+                    if not desc:
+                        continue
+                    cant = Decimal('1')
+                    cu = Decimal('0')
+                    try: cant = Decimal(str(it.get('cantidad_solicitada', '1')))
+                    except Exception: pass
+                    try: cu = Decimal(str(it.get('costo_unitario', '0')))
+                    except Exception: pass
+                    ct = cant * cu
+
+                    rec = PurchaseRequest.objects.create(
+                        solicitante_nombre=solicitante,
+                        proveedor=str(it.get('proveedor', '')).strip() or None,
+                        codigo_compra=str(it.get('codigo_compra', '')).strip() or None,
+                        descripcion=desc,
+                        cantidad_solicitada=cant,
+                        costo_unitario=cu,
+                        costo_total=ct,
+                        tipo_compra=str(it.get('tipo_compra', 'stock')).lower(),
+                        justification=str(it.get('justification', '')).strip() or "Carga masiva en lote",
+                        lote_id=lote_id,
+                        status='pendiente'
+                    )
+                    created_records.append(rec)
+
+        _enviar_correo_lote_masivo(solicitante, tipo, lote_id, created_records)
+
+        return JsonResponse({
+            'success': True,
+            'lote_id': lote_id,
+            'total_procesados': len(created_records),
+            'message': f"Lote {lote_id} procesado exitosamente con {len(created_records)} solicitudes."
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def _enviar_correo_lote_masivo(solicitante, tipo, lote_id, records):
+    dest = getattr(settings, 'ABASTECIMIENTO_EMAIL', 'abastecimiento@pesco.cl')
+    tipo_str = "Creación de Códigos" if tipo == 'codigo' else "Solicitudes de Compra"
+
+    summary_lines = []
+    for r in records:
+        if tipo == 'codigo':
+            summary_lines.append(f" - #{r.pk} [{r.generated_code or 'Pendiente'}]: {r.proposed_description} (Grupo: {r.grupo_material or '-'})")
+        else:
+            summary_lines.append(f" - #{r.pk} [{r.codigo_compra or 'S/C'}]: {r.descripcion} x {r.cantidad_solicitada} un. (${r.costo_total})")
+
+    resumen_txt = "\n".join(summary_lines[:25])
+    if len(records) > 25:
+        resumen_txt += f"\n... y {len(records) - 25} ítems más."
+
+    try:
+        send_mail(
+            subject=f"[PESCO] Nueva Carga Masiva {lote_id} ({len(records)} ítems) - {solicitante}",
+            message=(
+                f"Se ha ingresado un nuevo LOTE MASIVO de solicitudes en el Portal PESCO.\n\n"
+                f"ID de Lote: {lote_id}\n"
+                f"Tipo de Lote: {tipo_str}\n"
+                f"Solicitante: {solicitante}\n"
+                f"Total de Ítems: {len(records)}\n\n"
+                f"── RESUMEN DE ÍTEMS EN EL LOTE ──\n"
+                f"{resumen_txt}\n\n"
+                f"Portal de Administración: http://127.0.0.1:8000/solicitudes/"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[dest],
+            fail_silently=True,
+        )
+    except Exception:
+        pass
+
 

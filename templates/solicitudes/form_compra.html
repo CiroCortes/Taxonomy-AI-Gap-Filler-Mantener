@@ -16,6 +16,26 @@
     <button onclick="location.reload()" style="margin-top:1rem;padding:.5rem 1.2rem;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:.5rem;cursor:pointer;font-size:.85rem;">Nueva solicitud</button>
   </div>
 
+  
+  <!-- ══ BANDA DE CARGA MASIVA EXCEL COMPRAS ══ -->
+  <div class="drag-drop-card" id="excel-batch-dropzone-compra" style="margin-bottom:1.5rem;padding:1.1rem 1.4rem;background:rgba(30,41,59,0.5);border:1.5px dashed rgba(99,102,241,0.4);border-radius:.75rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.75rem;">
+      <div style="text-align:left;flex:1;min-width:260px;">
+        <div style="font-size:.92rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:.4rem;">
+          🛒 Carga Masiva de Compras por Excel (.xlsx)
+        </div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:.2rem;">
+          Carga un listado masivo de artículos para compras en la Bandeja Masiva.
+        </div>
+      </div>
+      <div style="display:flex;gap:.5rem;align-items:center;">
+        <a href="/api/masivo/descargar-plantilla/compra/" target="_blank" class="file-download-btn" style="padding:.45rem .85rem;font-size:.78rem;">📥 Plantilla Compras Excel</a>
+        <button type="button" class="btn-action approve" style="padding:.45rem .95rem;font-size:.8rem;font-weight:700;border-radius:.5rem;cursor:pointer;background:#6366f1;" onclick="document.getElementById('excel-batch-file-compra').click()">📁 Subir Excel Compras</button>
+        <input type="file" id="excel-batch-file-compra" accept=".xlsx,.xls" style="display:none;" onchange="handleBatchExcelUploadCompra(this)">
+      </div>
+    </div>
+  </div>
+
   <form id="form-compra">
     {% csrf_token %}
     <div class="form-grid">
@@ -105,7 +125,12 @@
       </div>
     </div>
 
-    <button type="submit" class="btn-submit" id="btn-submit">📤 Enviar Solicitud de Compra</button>
+    
+    <div style="display:flex;gap:1rem;margin-top:1.75rem;">
+      <button type="button" class="btn-submit" style="background:#6366f1;flex:1;box-shadow:0 4px 14px rgba(99,102,241,0.3);" onclick="enqueueCurrentCompraFormToBatch()">➕ Agregar a Bandeja Masiva</button>
+      <button type="submit" class="btn-submit" id="btn-submit" style="flex:2;">📤 Enviar Solicitud Unitaria</button>
+    </div>
+
   </form>
 </div>
 

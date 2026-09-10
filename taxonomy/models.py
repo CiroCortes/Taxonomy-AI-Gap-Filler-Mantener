@@ -122,6 +122,7 @@ class CodeCreationRequest(models.Model):
     subfamilia_propuesta = models.CharField(max_length=100, blank=True, null=True)
     categoria_propuesta = models.CharField(max_length=100, blank=True, null=True)
 
+    lote_id = models.CharField(max_length=50, blank=True, null=True, db_index=True, help_text="ID del lote de carga masiva.")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendiente', db_index=True)
     admin_notes = models.TextField(blank=True, null=True, help_text="Notas del administrador al aprobar/rechazar.")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -158,6 +159,7 @@ class PurchaseRequest(models.Model):
     tipo_compra = models.CharField(max_length=10, choices=TIPO_CHOICES, default='stock')
     justification = models.TextField(blank=True, null=True)
 
+    lote_id = models.CharField(max_length=50, blank=True, null=True, db_index=True, help_text="ID del lote de carga masiva.")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendiente', db_index=True)
     admin_notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

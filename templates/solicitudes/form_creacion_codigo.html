@@ -75,6 +75,26 @@
     <button onclick="location.reload()" style="margin-top:1rem;padding:.5rem 1.2rem;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:.5rem;cursor:pointer;font-size:.85rem;">Crear otra solicitud</button>
   </div>
 
+  
+  <!-- ══ BANDA DE CARGA MASIVA EXCEL ══ -->
+  <div class="drag-drop-card" id="excel-batch-dropzone" style="margin-bottom:1.5rem;padding:1.1rem 1.4rem;background:rgba(30,41,59,0.5);border:1.5px dashed rgba(0,180,216,0.4);border-radius:.75rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.75rem;">
+      <div style="text-align:left;flex:1;min-width:260px;">
+        <div style="font-size:.92rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:.4rem;">
+          📊 Carga Masiva por Planilla Excel (.xlsx)
+        </div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:.2rem;">
+          Arrastra tu archivo Excel aquí para cargar 10, 50 o 100 solicitudes simultáneamente en la Bandeja Masiva.
+        </div>
+      </div>
+      <div style="display:flex;gap:.5rem;align-items:center;">
+        <a href="/api/masivo/descargar-plantilla/codigo/" target="_blank" class="file-download-btn" style="padding:.45rem .85rem;font-size:.78rem;">📥 Plantilla Excel</a>
+        <button type="button" class="btn-action approve" style="padding:.45rem .95rem;font-size:.8rem;font-weight:700;border-radius:.5rem;cursor:pointer;" onclick="document.getElementById('excel-batch-file-input').click()">📁 Subir Excel</button>
+        <input type="file" id="excel-batch-file-input" accept=".xlsx,.xls" style="display:none;" onchange="handleBatchExcelUpload(this)">
+      </div>
+    </div>
+  </div>
+
   <form id="form-codigo" enctype="multipart/form-data">
     {% csrf_token %}
 
@@ -277,7 +297,12 @@
       </div>
     </div>
 
-    <button type="submit" class="btn-submit" id="btn-submit">📤 Enviar Solicitud de Creación</button>
+    
+    <div style="display:flex;gap:1rem;margin-top:1.75rem;">
+      <button type="button" class="btn-submit" style="background:#2563eb;flex:1;box-shadow:0 4px 14px rgba(37,99,235,0.3);" onclick="enqueueCurrentCodeFormToBatch()">➕ Agregar a Bandeja Masiva</button>
+      <button type="submit" class="btn-submit" id="btn-submit" style="flex:2;">📤 Enviar Solicitud Unitaria</button>
+    </div>
+
   </form>
 </div>
 
