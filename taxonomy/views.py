@@ -291,7 +291,8 @@ def upload_sap_excel_view(request):
                 return val if val is not None else default
             return default
 
-        existing_skus = {s.item_code: s for s in SKUItem.objects.all()} if not clear_db else {}
+        # Normalizar claves a mayúsculas/sin espacios para comparación robusta
+        existing_skus = {s.item_code.strip().upper(): s for s in SKUItem.objects.all()} if not clear_db else {}
         items_to_create = []
         items_to_update = []
         created_count = 0
@@ -306,6 +307,7 @@ def upload_sap_excel_view(request):
 
             total_rows += 1
             item_code_str = str(item_code).strip()
+            item_code_key = item_code_str.upper()  # clave normalizada para búsqueda
             item_name_str = str(get_val(row, 'ItemName', '')).strip()
 
             stock_val = float(get_val(row, 'Stock', 0.0) or 0.0)
@@ -328,8 +330,8 @@ def upload_sap_excel_view(request):
             modelo_val = modelo_val if (modelo_val and modelo_val.strip()) else None
             categoria_val = categoria_val if (categoria_val and categoria_val.strip()) else None
 
-            if item_code_str in existing_skus:
-                sku_obj = existing_skus[item_code_str]
+            if item_code_key in existing_skus:
+                sku_obj = existing_skus[item_code_key]
                 sku_obj.item_name = item_name_str
                 sku_obj.stock = stock_val
                 sku_obj.costo_un = costo_un_val
@@ -378,17 +380,28 @@ def upload_sap_excel_view(request):
 
         wb.close()
 
+        UPDATE_FIELDS = [
+            'item_name', 'stock', 'costo_un', 'costo_tt', 'moneda',
+            'precio_lista', 'cod_grupo', 'nombre_grupo', 'clase',
+            'familia', 'subfamilia', 'modelo', 'categoria',
+            'is_incomplete', 'pending_fields', 'ai_processed',
+            'ai_confidence_score', 'ai_rationale', 'ai_processed_at'
+        ]
         with transaction.atomic():
             if items_to_create:
-                SKUItem.objects.bulk_create(items_to_create, batch_size=2000)
+                # ignore_conflicts=True evita el error UNIQUE si el código ya existe
+                # (protección extra por si hay duplicados en el mismo Excel o en la DB)
+                SKUItem.objects.bulk_create(
+                    items_to_create,
+                    batch_size=2000,
+                    ignore_conflicts=True
+                )
             if items_to_update:
-                SKUItem.objects.bulk_update(items_to_update, fields=[
-                    'item_name', 'stock', 'costo_un', 'costo_tt', 'moneda',
-                    'precio_lista', 'cod_grupo', 'nombre_grupo', 'clase',
-                    'familia', 'subfamilia', 'modelo', 'categoria',
-                    'is_incomplete', 'pending_fields', 'ai_processed',
-                    'ai_confidence_score', 'ai_rationale', 'ai_processed_at'
-                ], batch_size=2000)
+                SKUItem.objects.bulk_update(
+                    items_to_update,
+                    fields=UPDATE_FIELDS,
+                    batch_size=2000
+                )
 
         return JsonResponse({
             'success': True,

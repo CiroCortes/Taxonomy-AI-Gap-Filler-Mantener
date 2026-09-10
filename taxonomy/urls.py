@@ -25,6 +25,7 @@ urlpatterns = [
     path('solicitudes/nueva-compra/', views_solicitudes.nueva_solicitud_compra_view, name='solicitudes_nueva_compra'),
 
     # ─── Acciones de Aprobación (Admin) ────────────────────────────────────────
+    path('solicitudes/codigo/<int:pk>/detalle/', views_solicitudes.api_code_request_detail, name='code_request_detail'),
     path('solicitudes/codigo/<int:pk>/accion/', views_solicitudes.approve_code_request, name='approve_code_request'),
     path('solicitudes/compra/<int:pk>/accion/', views_solicitudes.approve_purchase_request, name='approve_purchase_request'),
 

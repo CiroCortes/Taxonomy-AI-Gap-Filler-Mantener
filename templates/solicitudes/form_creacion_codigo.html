@@ -8,105 +8,271 @@
   </div>
 </div>
 
+<style>
+.form-section {
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  background: var(--card);
+}
+.form-section-title {
+  font-size: .8rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--blue);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.toggle-row { display: flex; align-items: center; gap: .75rem; margin: .75rem 0 .5rem; }
+.toggle-label { font-size: .85rem; color: var(--text); font-weight: 600; cursor: pointer; }
+.toggle-switch { position: relative; display: inline-block; width: 42px; height: 24px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; inset: 0;
+  background: var(--border); border-radius: 12px; cursor: pointer; transition: .25s;
+}
+.toggle-slider:before {
+  content: ''; position: absolute; left: 3px; top: 3px;
+  width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: .25s;
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--blue); }
+.toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); }
+.file-drop-zone {
+  border: 2px dashed var(--border); border-radius: .75rem; padding: 1.5rem;
+  text-align: center; cursor: pointer; transition: border-color .2s, background .2s;
+  background: var(--input-bg);
+}
+.file-drop-zone:hover, .file-drop-zone.dragover {
+  border-color: var(--blue); background: rgba(0,180,216,.06);
+}
+.file-drop-zone input[type=file] { display: none; }
+.file-drop-icon { font-size: 2rem; margin-bottom: .5rem; }
+.file-drop-text { font-size: .82rem; color: var(--muted); }
+.file-chosen { font-size: .8rem; color: var(--blue); margin-top: .5rem; font-weight: 600; }
+.ai-ref-badge {
+  display: none; background: rgba(167,139,250,.12);
+  border: 1px solid rgba(167,139,250,.4); border-radius: .6rem;
+  padding: .6rem .9rem; font-size: .82rem; color: #a78bfa; margin-top: .6rem;
+}
+.ai-ref-badge strong { color: var(--text); }
+.ai-ref-apply {
+  background: none; border: 1px solid #a78bfa; color: #a78bfa;
+  border-radius: .4rem; padding: .2rem .7rem; font-size: .78rem;
+  cursor: pointer; margin-left: .75rem; transition: .2s;
+}
+.ai-ref-apply:hover { background: rgba(167,139,250,.15); }
+</style>
+
 <div class="form-card">
   <div id="success-panel" class="success-panel">
     <h3>✅ ¡Solicitud enviada exitosamente!</h3>
-    <p style="color:var(--muted);font-size:.9rem;">Se ha notificado a <strong>abastecimiento@pesco.cl</strong>. El equipo revisará tu solicitud y la aprobará o rechazará.</p>
+    <p style="color:var(--muted);font-size:.9rem;">Se ha notificado a <strong>abastecimiento@pesco.cl</strong>. El equipo revisará tu solicitud.</p>
     <p style="margin-top:.5rem;color:var(--muted);font-size:.85rem;">ID de solicitud: <strong id="solicitud-id" style="color:var(--blue);">—</strong></p>
     <button onclick="location.reload()" style="margin-top:1rem;padding:.5rem 1.2rem;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:.5rem;cursor:pointer;font-size:.85rem;">Crear otra solicitud</button>
   </div>
 
-  <form id="form-codigo">
+  <form id="form-codigo" enctype="multipart/form-data">
     {% csrf_token %}
-    <div class="form-grid">
 
-      <!-- Nombre solicitante -->
-      <div class="form-group full">
-        <label class="form-label required">Tu Nombre / Área</label>
-        <input id="solicitante_nombre" name="solicitante_nombre" class="form-input" placeholder="Ej: Juan Pérez - Pañol EPP" required>
-      </div>
-
-      <!-- Búsqueda del código base -->
-      <div class="form-group full">
-        <label class="form-label">Código SAP de Referencia (para duplicar)</label>
-        <div class="autocomplete-box">
-          <input id="base-search" class="form-input" placeholder="Busca por código o descripción..." autocomplete="off">
-          <div id="autocomplete-results" class="autocomplete-results"></div>
+    <!-- ══ 1: IDENTIFICACIÓN ══ -->
+    <div class="form-section">
+      <div class="form-section-title">👤 Identificación del Solicitante</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label required">Tu Nombre / Área</label>
+          <input id="solicitante_nombre" name="solicitante_nombre" class="form-input" placeholder="Ej: Juan Pérez - Pañol EPP" required>
         </div>
-        <input type="hidden" id="base_sku_id" name="base_sku_id">
-        <div id="taxonomy-preview" class="taxonomy-preview">
-          Taxonomía base → Clase: <span id="prev-clase">—</span> / Familia: <span id="prev-familia">—</span> / SubFamilia: <span id="prev-subfamilia">—</span> / Categoría: <span id="prev-categoria">—</span>
+        <div class="form-group">
+          <label class="form-label required">Grupo de Material</label>
+          <select id="grupo_material" name="grupo_material" class="form-input" required>
+            <option value="">— Selecciona el grupo de material —</option>
+            {% for g in grupos_material %}
+              <option value="{{ g }}">{{ g }}</option>
+            {% endfor %}
+          </select>
         </div>
-      </div>
-
-      <!-- Correlativo sugerido -->
-      <div class="form-group full">
-        <label class="form-label required">Código SAP Propuesto (Correlativo)</label>
-        <input id="generated_code" name="generated_code" class="form-input" placeholder="Se calculará automáticamente al elegir base, o ingresa manualmente" required>
-        <div id="correlative-preview" class="correlative-preview">
-          <div class="label">🔢 Siguiente correlativo detectado en el Maestro:</div>
-          <div class="value" id="correlative-value">—</div>
-        </div>
-      </div>
-
-      <!-- Descripción -->
-      <div class="form-group full">
-        <label class="form-label required">Descripción del Nuevo Artículo</label>
-        <input id="proposed_description" name="proposed_description" class="form-input" placeholder="Ej: GUANTE NITRILO TALLA L ANTIDESLIZANTE" required>
-      </div>
-
-      <!-- Justificación -->
-      <div class="form-group full">
-        <label class="form-label required">Motivo de la Creación</label>
-        <textarea id="justification" name="justification" class="form-textarea" placeholder="Ej: Se requiere para diferenciarlo del código ZM-1023 que es talla M. El proveedor solo tiene este en talla L." required></textarea>
-      </div>
-
-      <!-- Taxonomía propuesta (pre-llenada desde base) -->
-      <div class="form-group">
-        <label class="form-label">Clase Propuesta</label>
-        <input id="clase_propuesta" name="clase_propuesta" class="form-input" placeholder="Se copia del código base">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Familia Propuesta</label>
-        <input id="familia_propuesta" name="familia_propuesta" class="form-input" placeholder="Se copia del código base">
-      </div>
-      <div class="form-group">
-        <label class="form-label">SubFamilia Propuesta</label>
-        <input id="subfamilia_propuesta" name="subfamilia_propuesta" class="form-input" placeholder="Se copia del código base">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Categoría Propuesta</label>
-        <input id="categoria_propuesta" name="categoria_propuesta" class="form-input" placeholder="Opcional">
       </div>
     </div>
 
-    <!-- Asistente IA -->
-    <div class="ai-assistant-box">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
-        <div>
-          <div style="font-size:.875rem;font-weight:700;color:#a78bfa;">✨ Asistente IA PESCO</div>
-          <div style="font-size:.78rem;color:var(--muted);margin-top:.15rem;">Gemini analizará tu descripción y sugerirá mejoras según el estándar del Maestro SAP.</div>
+    <!-- ══ 2: CÓDIGO SAP ══ -->
+    <div class="form-section">
+      <div class="form-section-title">🔢 Código SAP</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label class="form-label">Código SAP de Referencia <span style="color:var(--muted);font-weight:400;">(para derivar correlativo)</span></label>
+          <div class="autocomplete-box">
+            <input id="base-search" class="form-input" placeholder="Busca por código o descripción en el Maestro..." autocomplete="off">
+            <div id="autocomplete-results" class="autocomplete-results"></div>
+          </div>
+          <input type="hidden" id="base_sku_id" name="base_sku_id">
+          <div class="ai-ref-badge" id="ai-ref-badge">
+            ✨ IA sugiere usar como base: <strong id="ai-ref-code">—</strong> — <span id="ai-ref-name" style="color:var(--muted);">—</span>
+            <button type="button" class="ai-ref-apply" onclick="applyAiRef()">Usar esta referencia</button>
+          </div>
+          <div id="taxonomy-preview" class="taxonomy-preview" style="display:none;">
+            Taxonomía base → Clase: <span id="prev-clase">—</span> / Familia: <span id="prev-familia">—</span> / SubFamilia: <span id="prev-subfamilia">—</span> / Categoría: <span id="prev-categoria">—</span>
+          </div>
         </div>
-        <button type="button" class="ai-btn" id="btn-ai" onclick="runAiAssistant()">✨ Mejorar con IA</button>
+        <div class="form-group full">
+          <label class="form-label required">Código SAP Propuesto (Correlativo)</label>
+          <input id="generated_code" name="generated_code" class="form-input" placeholder="Se calcula automáticamente al seleccionar referencia base" required>
+          <div id="correlative-preview" class="correlative-preview" style="display:none;">
+            <div class="label">🔢 Siguiente correlativo detectado en el Maestro:</div>
+            <div class="value" id="correlative-value">—</div>
+          </div>
+        </div>
       </div>
-      <div id="ai-result" class="ai-result">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.25rem;">
-          <span style="font-size:.78rem;color:var(--muted);font-weight:600;">Completitud estimada</span>
-          <span id="ai-score-text" style="font-size:.78rem;font-weight:700;color:var(--blue);">0%</span>
+    </div>
+
+    <!-- ══ 3: DESCRIPCIÓN ══ -->
+    <div class="form-section">
+      <div class="form-section-title">📋 Descripción y Justificación</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label class="form-label required">Descripción del Nuevo Artículo</label>
+          <input id="proposed_description" name="proposed_description" class="form-input" placeholder="Ej: CINTURÓN SEGURIDAD 4 PUNTOS AJUSTADO LONGITUD 605MM AMBULANCIA" required>
         </div>
-        <div class="ai-score-bar"><div class="ai-score-fill" id="ai-score-fill" style="width:0%"></div></div>
-        <div style="margin-top:.75rem;">
-          <div style="font-size:.78rem;font-weight:700;color:#a78bfa;margin-bottom:.3rem;">Descripción mejorada:</div>
-          <div id="ai-desc-mejorada" style="font-size:.85rem;color:var(--input-text);background:var(--input-bg);border:1px solid var(--border);border-radius:.5rem;padding:.6rem .8rem;"></div>
-          <button type="button" class="apply-desc-btn" onclick="applyAiDesc()">✅ Usar esta descripción</button>
+        <div class="form-group full">
+          <label class="form-label required">Motivo de la Creación</label>
+          <textarea id="justification" name="justification" class="form-textarea" placeholder="Ej: Se requiere para diferenciarlo del código existente. Proveedor CSV modelo CSE4P-015 requiere longitud mínima 605mm." required></textarea>
         </div>
-        <div style="margin-top:.75rem;" id="ai-sugerencias-wrap">
-          <div style="font-size:.78rem;font-weight:700;color:var(--emerald);margin-bottom:.3rem;">💡 Sugerencias:</div>
-          <ul class="ai-suggestion-list" id="ai-sugerencias"></ul>
+      </div>
+
+      <div class="ai-assistant-box">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+          <div>
+            <div style="font-size:.875rem;font-weight:700;color:#a78bfa;">✨ Asistente IA PESCO</div>
+            <div style="font-size:.78rem;color:var(--muted);margin-top:.15rem;">Gemini buscará artículos similares en el Maestro según tu grupo de material y sugerirá descripción + código de referencia.</div>
+          </div>
+          <button type="button" class="ai-btn" id="btn-ai" onclick="runAiAssistant()">✨ Mejorar con IA</button>
         </div>
-        <div style="margin-top:.5rem;" id="ai-advertencias-wrap">
-          <div style="font-size:.78rem;font-weight:700;color:var(--amber);margin-bottom:.3rem;">⚠ Advertencias:</div>
-          <ul class="ai-suggestion-list ai-warning-list" id="ai-advertencias"></ul>
+        <div id="ai-result" class="ai-result">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.25rem;">
+            <span style="font-size:.78rem;color:var(--muted);font-weight:600;">Completitud estimada</span>
+            <span id="ai-score-text" style="font-size:.78rem;font-weight:700;color:var(--blue);">0%</span>
+          </div>
+          <div class="ai-score-bar"><div class="ai-score-fill" id="ai-score-fill" style="width:0%"></div></div>
+          <div style="margin-top:.75rem;">
+            <div style="font-size:.78rem;font-weight:700;color:#a78bfa;margin-bottom:.3rem;">Descripción mejorada:</div>
+            <div id="ai-desc-mejorada" style="font-size:.85rem;color:var(--input-text);background:var(--input-bg);border:1px solid var(--border);border-radius:.5rem;padding:.6rem .8rem;"></div>
+            <button type="button" class="apply-desc-btn" onclick="applyAiDesc()">✅ Usar esta descripción</button>
+          </div>
+          <div style="margin-top:.75rem;" id="ai-sugerencias-wrap">
+            <div style="font-size:.78rem;font-weight:700;color:var(--emerald);margin-bottom:.3rem;">💡 Sugerencias:</div>
+            <ul class="ai-suggestion-list" id="ai-sugerencias"></ul>
+          </div>
+          <div style="margin-top:.5rem;display:none;" id="ai-advertencias-wrap">
+            <div style="font-size:.78rem;font-weight:700;color:var(--amber);margin-bottom:.3rem;">⚠ Advertencias:</div>
+            <ul class="ai-suggestion-list ai-warning-list" id="ai-advertencias"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 4: TAXONOMÍA ══ -->
+    <div class="form-section">
+      <div class="form-section-title">🏷 Taxonomía SAP</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Clase Propuesta</label>
+          <input id="clase_propuesta" name="clase_propuesta" class="form-input" placeholder="Se copia del código base">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Familia Propuesta</label>
+          <input id="familia_propuesta" name="familia_propuesta" class="form-input" placeholder="Se copia del código base">
+        </div>
+        <div class="form-group">
+          <label class="form-label">SubFamilia Propuesta</label>
+          <input id="subfamilia_propuesta" name="subfamilia_propuesta" class="form-input" placeholder="Se copia del código base">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Categoría Propuesta</label>
+          <input id="categoria_propuesta" name="categoria_propuesta" class="form-input" placeholder="Opcional">
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 5: PROVEEDOR ══ -->
+    <div class="form-section">
+      <div class="form-section-title">🏭 Datos del Proveedor</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Nombre del Proveedor</label>
+          <input id="proveedor_nombre" name="proveedor_nombre" class="form-input" placeholder="Ej: CSV, Ferretería Central">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Código Catálogo Proveedor</label>
+          <input id="codigo_catalogo_proveedor" name="codigo_catalogo_proveedor" class="form-input" placeholder="Ej: CSE4P-015">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unidad / Medida de Empaque</label>
+          <input id="unidad_empaque" name="unidad_empaque" class="form-input" placeholder="Ej: Caja x 12, UN, KG, MT">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lote Mínimo de Compra</label>
+          <input id="lote_minimo" name="lote_minimo" type="number" min="1" class="form-input" placeholder="Ej: 100">
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <label class="toggle-switch">
+          <input type="checkbox" id="es_importado" name="es_importado" onchange="toggleImportado(this)">
+          <span class="toggle-slider"></span>
+        </label>
+        <label class="toggle-label" for="es_importado">¿Artículo importado / internacional?</label>
+      </div>
+
+      <div id="importado-fields" style="display:none;margin-top:.75rem;">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Precio Referencial</label>
+            <input id="precio_referencial" name="precio_referencial" type="text" class="form-input" placeholder="Ej: 45.50">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Moneda</label>
+            <select id="moneda_precio" name="moneda_precio" class="form-input">
+              <option value="USD">USD – Dólar</option>
+              <option value="EUR">EUR – Euro</option>
+              <option value="CLP">CLP – Peso Chileno</option>
+              <option value="BRL">BRL – Real Brasileño</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Incoterm</label>
+            <select id="incoterm" name="incoterm" class="form-input">
+              <option value="EXW">EXW – Ex Works</option>
+              <option value="FOB">FOB – Free on Board</option>
+              <option value="CIF">CIF – Cost, Insurance &amp; Freight</option>
+              <option value="DDP">DDP – Delivered Duty Paid</option>
+              <option value="DAP">DAP – Delivered at Place</option>
+              <option value="NA">N/A – No aplica</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 6: FICHA TÉCNICA ══ -->
+    <div class="form-section">
+      <div class="form-section-title">📐 Ficha Técnica</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label class="form-label">Especificaciones Técnicas</label>
+          <textarea id="ficha_tecnica" name="ficha_tecnica" class="form-textarea" placeholder="Ej: Longitud mínima extensión máxima: 605 mm. Cintas de amarre inferiores modificadas. Argolla para fijación a pared incluida."></textarea>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Adjuntar Ficha Técnica <span style="color:var(--muted);font-weight:400;">(PDF, JPG o PNG · máx 20 MB)</span></label>
+          <div class="file-drop-zone" id="file-drop-zone" onclick="document.getElementById('ficha_tecnica_archivo').click()"
+               ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+            <input type="file" id="ficha_tecnica_archivo" name="ficha_tecnica_archivo" accept=".pdf,.jpg,.jpeg,.png" onchange="handleFileSelect(this)">
+            <div class="file-drop-icon">📎</div>
+            <div class="file-drop-text">Haz clic o arrastra aquí tu archivo<br><span style="font-size:.75rem;">PDF · JPG · PNG</span></div>
+            <div class="file-chosen" id="file-chosen-name" style="display:none;"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -118,10 +284,12 @@
 <script>
 const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
 let aiDescMejorada = '';
+let aiRefCode = null;
+let aiRefName = null;
 
-// Autocompletado
+// ── Autocompletado ────────────────────────────────────────────────────────────
 const searchInput = document.getElementById('base-search');
-const resultsBox = document.getElementById('autocomplete-results');
+const resultsBox  = document.getElementById('autocomplete-results');
 let searchTimer;
 
 searchInput.addEventListener('input', () => {
@@ -133,7 +301,7 @@ searchInput.addEventListener('input', () => {
       .then(r => r.json())
       .then(data => {
         resultsBox.innerHTML = '';
-        if (!data.results.length) { resultsBox.style.display='none'; return; }
+        if (!data.results.length) { resultsBox.style.display = 'none'; return; }
         data.results.forEach(sku => {
           const div = document.createElement('div');
           div.className = 'autocomplete-item';
@@ -145,53 +313,51 @@ searchInput.addEventListener('input', () => {
       });
   }, 300);
 });
-
-document.addEventListener('click', e => { if (!e.target.closest('.autocomplete-box')) resultsBox.style.display='none'; });
+document.addEventListener('click', e => { if (!e.target.closest('.autocomplete-box')) resultsBox.style.display = 'none'; });
 
 function selectSku(sku) {
   searchInput.value = `${sku.item_code} - ${sku.item_name}`;
   document.getElementById('base_sku_id').value = sku.id;
   resultsBox.style.display = 'none';
 
-  // Prellenar taxonomía
-  document.getElementById('clase_propuesta').value = sku.clase || '';
-  document.getElementById('familia_propuesta').value = sku.familia || '';
+  document.getElementById('clase_propuesta').value      = sku.clase      || '';
+  document.getElementById('familia_propuesta').value    = sku.familia    || '';
   document.getElementById('subfamilia_propuesta').value = sku.subfamilia || '';
-  document.getElementById('categoria_propuesta').value = sku.categoria || '';
+  document.getElementById('categoria_propuesta').value  = sku.categoria  || '';
 
-  // Mostrar preview taxonomía
-  document.getElementById('prev-clase').textContent = sku.clase || '—';
-  document.getElementById('prev-familia').textContent = sku.familia || '—';
+  document.getElementById('prev-clase').textContent      = sku.clase      || '—';
+  document.getElementById('prev-familia').textContent    = sku.familia    || '—';
   document.getElementById('prev-subfamilia').textContent = sku.subfamilia || '—';
-  document.getElementById('prev-categoria').textContent = sku.categoria || '—';
+  document.getElementById('prev-categoria').textContent  = sku.categoria  || '—';
   document.getElementById('taxonomy-preview').style.display = 'block';
 
-  // Calcular correlativo
   fetch(`/api/next-correlative/${encodeURIComponent(sku.item_code)}/`)
     .then(r => r.json())
     .then(data => {
       if (data.success) {
-        document.getElementById('generated_code').value = data.next_code;
+        document.getElementById('generated_code').value         = data.next_code;
         document.getElementById('correlative-value').textContent = data.next_code;
         document.getElementById('correlative-preview').style.display = 'block';
       }
     });
 }
 
-// Asistente IA
+// ── Asistente IA ─────────────────────────────────────────────────────────────
 function runAiAssistant() {
-  const desc = document.getElementById('proposed_description').value.trim();
-  const just = document.getElementById('justification').value.trim();
+  const desc  = document.getElementById('proposed_description').value.trim();
+  const just  = document.getElementById('justification').value.trim();
+  const grupo = document.getElementById('grupo_material').value.trim();
   const baseName = searchInput.value.replace(/^[^-]+ - /, '').trim();
+
   if (!desc) { alert('Ingresa primero la descripción del artículo.'); return; }
 
   const btn = document.getElementById('btn-ai');
-  btn.disabled = true; btn.textContent = '⏳ Analizando...';
+  btn.disabled = true; btn.textContent = '⏳ Consultando Maestro...';
 
   fetch('/api/ai-assistant/', {
     method: 'POST',
-    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF},
-    body: JSON.stringify({descripcion: desc, justificacion: just, base_item_name: baseName, tipo: 'codigo'})
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ descripcion: desc, justificacion: just, base_item_name: baseName, grupo_material: grupo, tipo: 'codigo' })
   })
   .then(r => r.json())
   .then(data => {
@@ -205,12 +371,23 @@ function runAiAssistant() {
     document.getElementById('ai-score-text').textContent = score + '%';
     document.getElementById('ai-score-fill').style.width = score + '%';
 
-    const sugList = document.getElementById('ai-sugerencias');
-    sugList.innerHTML = (data.sugerencias||[]).map(s=>`<li>💡 ${s}</li>`).join('');
+    document.getElementById('ai-sugerencias').innerHTML =
+      (data.sugerencias || []).map(s => `<li>💡 ${s}</li>`).join('');
+    document.getElementById('ai-advertencias').innerHTML =
+      (data.advertencias || []).map(w => `<li>⚠ ${w}</li>`).join('');
+    document.getElementById('ai-advertencias-wrap').style.display =
+      data.advertencias && data.advertencias.length ? 'block' : 'none';
 
-    const warnList = document.getElementById('ai-advertencias');
-    warnList.innerHTML = (data.advertencias||[]).map(w=>`<li>⚠ ${w}</li>`).join('');
-    document.getElementById('ai-advertencias-wrap').style.display = data.advertencias?.length ? 'block' : 'none';
+    aiRefCode = data.codigo_referencia_sugerido || null;
+    aiRefName = data.nombre_referencia_sugerido || null;
+    const badge = document.getElementById('ai-ref-badge');
+    if (aiRefCode) {
+      document.getElementById('ai-ref-code').textContent = aiRefCode;
+      document.getElementById('ai-ref-name').textContent = aiRefName || '';
+      badge.style.display = 'block';
+    } else {
+      badge.style.display = 'none';
+    }
 
     document.getElementById('ai-result').style.display = 'block';
   })
@@ -221,15 +398,66 @@ function applyAiDesc() {
   if (aiDescMejorada) document.getElementById('proposed_description').value = aiDescMejorada;
 }
 
-// Envío del formulario
+function applyAiRef() {
+  if (!aiRefCode) return;
+  fetch(`/api/buscar-skus/?q=${encodeURIComponent(aiRefCode)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.results && data.results.length > 0) {
+        selectSku(data.results[0]);
+        document.getElementById('ai-ref-badge').style.display = 'none';
+      } else {
+        alert(`No se encontró el código "${aiRefCode}" en el Maestro. Búscalo manualmente.`);
+      }
+    });
+}
+
+// ── Toggle artículo importado ─────────────────────────────────────────────────
+function toggleImportado(cb) {
+  document.getElementById('importado-fields').style.display = cb.checked ? 'block' : 'none';
+}
+
+// ── Drag & drop ficha técnica ─────────────────────────────────────────────────
+function handleFileSelect(input) {
+  if (input.files[0]) showFileName(input.files[0].name);
+}
+function showFileName(name) {
+  const el = document.getElementById('file-chosen-name');
+  el.textContent = '✅ ' + name;
+  el.style.display = 'block';
+}
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('file-drop-zone').classList.add('dragover');
+}
+function handleDragLeave() {
+  document.getElementById('file-drop-zone').classList.remove('dragover');
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('file-drop-zone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['pdf','jpg','jpeg','png'].includes(ext)) { alert('Solo se aceptan PDF, JPG o PNG.'); return; }
+  const input = document.getElementById('ficha_tecnica_archivo');
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  input.files = dt.files;
+  showFileName(file.name);
+}
+
+// ── Envío del formulario ─────────────────────────────────────────────────────
 document.getElementById('form-codigo').addEventListener('submit', async e => {
   e.preventDefault();
   const btn = document.getElementById('btn-submit');
   btn.disabled = true; btn.textContent = '⏳ Enviando...';
+
   const fd = new FormData(e.target);
-  const res = await fetch('/solicitudes/nuevo-codigo/', {method:'POST', headers:{'X-CSRFToken':CSRF}, body: fd});
+  const res = await fetch('/solicitudes/nuevo-codigo/', { method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd });
   const data = await res.json();
   btn.disabled = false; btn.textContent = '📤 Enviar Solicitud de Creación';
+
   if (data.success) {
     document.getElementById('form-codigo').style.display = 'none';
     document.getElementById('solicitud-id').textContent = '#' + data.id;

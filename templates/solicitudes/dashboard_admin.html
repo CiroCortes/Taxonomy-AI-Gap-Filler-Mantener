@@ -1,6 +1,143 @@
 {% extends "base_solicitudes.html" %}
 {% block title %}Dashboard Solicitudes | PESCO S.A.{% endblock %}
 {% block content %}
+<style>
+/* ─── MODAL ENRIQUECIMIENTO ADMIN (FIXED OVERFLOW & SCROLLBAR) ─── */
+.modal-overlay { z-index: 1000 !important; }
+.modal-box.modal-large {
+  max-width: 960px !important;
+  width: 92vw !important;
+  max-height: 86vh !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background: var(--card-bg, #0f172a) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0.85rem !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6) !important;
+}
+
+.modal-header {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.95);
+}
+.btn-close-modal {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: .2rem .4rem;
+  border-radius: .4rem;
+  transition: all .15s;
+}
+.btn-close-modal:hover { color: #ffffff; background: rgba(255,255,255,0.1); }
+
+/* ─── SCROLLABLE CONTAINER & Sleek Scrollbar ─── */
+.scrollable-body {
+  flex: 1 1 auto;
+  overflow-y: auto !important;
+  max-height: calc(86vh - 135px);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Custom Scrollbar Styles */
+.scrollable-body::-webkit-scrollbar {
+  width: 9px;
+}
+.scrollable-body::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 4px;
+}
+.scrollable-body::-webkit-scrollbar-thumb {
+  background: #00B4D8;
+  border-radius: 4px;
+  border: 2px solid rgba(15, 23, 42, 0.6);
+}
+.scrollable-body::-webkit-scrollbar-thumb:hover {
+  background: #0077b6;
+}
+
+/* Firefox Scrollbar */
+.scrollable-body {
+  scrollbar-width: thin;
+  scrollbar-color: #00B4D8 rgba(15, 23, 42, 0.6);
+}
+
+.admin-detail-block {
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid var(--border);
+  border-radius: .6rem;
+  padding: 1rem 1.25rem;
+}
+.admin-detail-head {
+  font-size: .88rem;
+  font-weight: 700;
+  color: #00B4D8;
+  margin-bottom: .8rem;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ─── GRID FIXES (min-width: 0 prevents horizontal overflow) ─── */
+.admin-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem 1rem; }
+.admin-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem 1rem; }
+.admin-grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem 1rem; }
+.admin-grid-2 .full, .admin-grid-3 .full, .admin-grid-4 .full { grid-column: 1 / -1; }
+.admin-grid-2 > div, .admin-grid-3 > div, .admin-grid-4 > div { min-width: 0; }
+
+.form-group { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.form-input, .form-textarea { width: 100% !important; box-sizing: border-box !important; }
+
+.lbl { font-size: .78rem; font-weight: 600; color: var(--muted); }
+.box-quote { font-size: .85rem; background: var(--input-bg); border: 1px solid var(--border); padding: .6rem .8rem; border-radius: .5rem; margin-top: .2rem; color: var(--input-text); word-break: break-word; }
+.code-input { font-family: monospace; font-weight: 700; font-size: 1rem; color: #00B4D8; letter-spacing: 0.5px; }
+.static-val { font-size: .84rem; font-weight: 600; padding: .55rem .75rem; background: var(--input-bg); border: 1px solid var(--border); border-radius: .5rem; color: var(--input-text); word-break: break-word; }
+.file-download-btn { display: inline-flex; align-items: center; gap: .5rem; background: rgba(0,180,216,0.15); color: #00B4D8; border: 1px solid rgba(0,180,216,0.4); padding: .5rem .9rem; border-radius: .5rem; text-decoration: none; font-size: .82rem; font-weight: 600; transition: all .2s; }
+.file-download-btn:hover { background: #00B4D8; color: #fff; }
+
+.modal-footer-fixed {
+  flex-shrink: 0;
+  padding: .9rem 1.5rem;
+  border-top: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-modal { padding: .6rem 1.15rem; border-radius: .5rem; font-size: .85rem; font-weight: 700; cursor: pointer; border: none; transition: all .15s; }
+.btn-modal.save-draft { background: #2563eb; color: white; }
+.btn-modal.save-draft:hover { background: #1d4ed8; }
+.btn-modal.approve { background: #10b981; color: white; }
+.btn-modal.approve:hover { background: #059669; }
+.btn-modal.reject { background: #ef4444; color: white; }
+.btn-modal.reject:hover { background: #dc2626; }
+.btn-modal.cancel { background: var(--input-bg); color: var(--muted); border: 1px solid var(--border); }
+.btn-modal.cancel:hover { color: var(--text); }
+
+tr.clickable-row { cursor: pointer; transition: background .15s; }
+tr.clickable-row:hover { background: rgba(0,180,216,0.06); }
+
+@media (max-width: 768px) {
+  .admin-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-grid-3 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+}
+</style>
+
 <div class="page-header">
   <div>
     <h1 class="page-title">📊 Dashboard de Solicitudes</h1>
@@ -12,7 +149,7 @@
   </div>
 </div>
 
-<!-- ─── 6 Tarjetas KPI (Estilo Sistema PESCO) ─── -->
+<!-- ─── 6 Tarjetas KPI ─── -->
 <div class="kpi-grid">
   <!-- Total Solicitudes -->
   <div class="kpi-card kpi-blue">
@@ -100,7 +237,7 @@
       </thead>
       <tbody>
         {% for r in code_requests %}
-        <tr id="code-row-{{ r.pk }}">
+        <tr id="code-row-{{ r.pk }}" class="clickable-row" onclick="openCodeModal({{ r.pk }})">
           <td><strong>#{{ r.pk }}</strong></td>
           <td>{{ r.solicitante_nombre }}</td>
           <td><code class="code-chip">{{ r.generated_code|default:"—" }}</code></td>
@@ -108,16 +245,10 @@
           <td>{% if r.base_sku %}<code class="code-chip muted">{{ r.base_sku.item_code }}</code>{% else %}—{% endif %}</td>
           <td>{{ r.created_at|date:"d/m/Y H:i" }}</td>
           <td><span class="badge-status badge-{{ r.status }}" id="status-code-{{ r.pk }}">{{ r.get_status_display }}</span></td>
-          <td>
-            {% if r.status == 'pendiente' %}
+          <td onclick="event.stopPropagation();">
             <div class="action-btns">
-              <button class="btn-action approve" title="Aprobar solicitud" onclick="doAction('code', {{ r.pk }}, 'approve')">✅</button>
-              <button class="btn-action reject" title="Rechazar solicitud" onclick="doAction('code', {{ r.pk }}, 'reject')">❌</button>
-              <button class="btn-action detail" title="Ver detalle / agregar nota" onclick="showDetail({{ r.pk }}, 'code')">📝</button>
+              <button class="btn-action detail" title="Revisar, enriquecer y dar de alta en SAP" onclick="openCodeModal({{ r.pk }})">📝 Revisar</button>
             </div>
-            {% else %}
-            <button class="btn-action detail" title="Ver detalle" onclick="showDetail({{ r.pk }}, 'code')">🔍</button>
-            {% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -158,8 +289,8 @@
           <td>
             {% if r.status == 'pendiente' %}
             <div class="action-btns">
-              <button class="btn-action approve" title="Aprobar compra" onclick="doAction('purchase', {{ r.pk }}, 'approve')">✅</button>
-              <button class="btn-action reject" title="Rechazar compra" onclick="doAction('purchase', {{ r.pk }}, 'reject')">❌</button>
+              <button class="btn-action approve" title="Aprobar compra" onclick="doPurchaseAction({{ r.pk }}, 'approve')">✅</button>
+              <button class="btn-action reject" title="Rechazar compra" onclick="doPurchaseAction({{ r.pk }}, 'reject')">❌</button>
             </div>
             {% else %}
             <span style="font-size:.78rem;color:var(--muted);">Procesado</span>
@@ -175,34 +306,239 @@
   {% endif %}
 </section>
 
-<!-- Modal de detalle / notas admin -->
+<!-- ══ MODAL DE REVISIÓN Y ENRIQUECIMIENTO ADMIN ══ -->
 <div id="modal-overlay" class="modal-overlay hidden">
-  <div class="modal-box">
-    <h3 id="modal-title" class="modal-title">Gestión de Solicitud</h3>
-    <div id="modal-body" class="modal-body">Ingresa una nota o confirmación para el solicitante y equipo de abastecimiento:</div>
-    <div class="modal-footer">
-      <label class="modal-label">Nota o N° asignado en SAP:</label>
-      <textarea id="modal-notes" rows="3" placeholder="Ej: Código creado en SAP con número ZM-00812 y habilitado para compras."></textarea>
-      <div class="modal-actions">
-        <button class="btn-modal approve" id="btn-approve">✅ Aprobar con nota</button>
-        <button class="btn-modal reject" id="btn-reject">❌ Rechazar con motivo</button>
-        <button class="btn-modal cancel" onclick="closeModal()">Cancelar</button>
+  <div class="modal-box modal-large">
+    <div class="modal-header">
+      <div>
+        <h3 id="modal-title" class="modal-title" style="margin:0;font-size:1.1rem;color:var(--text);">📝 Revisión y Enriquecimiento SAP</h3>
+        <div id="modal-subtitle" style="font-size:.78rem;color:var(--muted);margin-top:.2rem;"></div>
       </div>
+      <button type="button" class="btn-close-modal" onclick="closeModal()" title="Cerrar modal">✕</button>
     </div>
+
+    <form id="admin-code-form" onsubmit="event.preventDefault();" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+      <input type="hidden" id="modal-req-id" name="req_id">
+
+      <div class="modal-body scrollable-body">
+        <!-- ── Seccion 1: Resumen Solicitud (Origen Solicitante) ── -->
+        <div class="admin-detail-block">
+          <div class="admin-detail-head">👤 Información del Solicitante y Solicitud Base</div>
+          <div class="admin-grid-2">
+            <div><span class="lbl">Solicitante:</span> <strong id="lbl-solicitante" style="color:#00B4D8;"></strong></div>
+            <div><span class="lbl">Fecha de Solicitud:</span> <span id="lbl-fecha"></span></div>
+            <div class="full"><span class="lbl">Motivo / Justificación del Solicitante:</span> <div id="lbl-justificacion" class="box-quote"></div></div>
+            <div class="full" id="lbl-base-sku-wrap" style="display:none;margin-top:.4rem;">
+              <span class="lbl">Código SAP de Referencia Utilizado:</span> <span id="lbl-base-sku" class="code-chip" style="margin-left:.4rem;"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Seccion 2: Enriquecimiento Taxonómico SAP ── -->
+        <div class="admin-detail-block">
+          <div class="admin-detail-head">🏷️ Taxonomía y Código SAP Definitivo (Edición Admin)</div>
+          <div class="admin-grid-2">
+            <div class="form-group">
+              <label class="form-label">Código SAP Definitivo *</label>
+              <input id="edit_generated_code" name="generated_code" class="form-input code-input" placeholder="Ej: 20701924" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Grupo de Material</label>
+              <input id="edit_grupo_material" name="grupo_material" class="form-input" placeholder="Ej: PESCO AMBULANCIAS">
+            </div>
+            <div class="form-group full">
+              <label class="form-label">Descripción Definitiva SAP *</label>
+              <textarea id="edit_proposed_description" name="proposed_description" class="form-textarea" rows="2" required></textarea>
+            </div>
+          </div>
+
+          <div class="admin-grid-4" style="margin-top:.75rem;">
+            <div class="form-group">
+              <label class="form-label">Clase</label>
+              <input id="edit_clase_propuesta" name="clase_propuesta" class="form-input" placeholder="Clase SAP">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Familia</label>
+              <input id="edit_familia_propuesta" name="familia_propuesta" class="form-input" placeholder="Familia SAP">
+            </div>
+            <div class="form-group">
+              <label class="form-label">SubFamilia</label>
+              <input id="edit_subfamilia_propuesta" name="subfamilia_propuesta" class="form-input" placeholder="SubFamilia SAP">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Categoría</label>
+              <input id="edit_categoria_propuesta" name="categoria_propuesta" class="form-input" placeholder="Categoría">
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Seccion 3: Datos de Proveedor y Logística ── -->
+        <div class="admin-detail-block">
+          <div class="admin-detail-head">🏭 Datos del Proveedor y Logística</div>
+          <div class="admin-grid-3">
+            <div class="form-group">
+              <label class="form-label">Nombre Proveedor</label>
+              <input id="edit_proveedor_nombre" name="proveedor_nombre" class="form-input" placeholder="Nombre Proveedor">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cod. Catálogo Proveedor</label>
+              <input id="edit_codigo_catalogo_proveedor" name="codigo_catalogo_proveedor" class="form-input" placeholder="Código de fábrica">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Unidad / Empaque</label>
+              <input id="edit_unidad_empaque" name="unidad_empaque" class="form-input" placeholder="Ej: UN, CJA x 12">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Lote Mínimo</label>
+              <input id="edit_lote_minimo" name="lote_minimo" type="number" class="form-input" placeholder="Cantidad mín.">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Precio Referencial</label>
+              <input id="edit_precio_referencial" name="precio_referencial" class="form-input" placeholder="Monto">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Incoterm / Moneda</label>
+              <div id="lbl-incoterm-moneda" class="static-val">—</div>
+            </div>
+          </div>
+
+          <div style="margin-top:.75rem;" class="admin-grid-2">
+            <div class="form-group full">
+              <label class="form-label">Especificaciones Ficha Técnica</label>
+              <textarea id="edit_ficha_tecnica" name="ficha_tecnica" class="form-textarea" rows="2" placeholder="Especificaciones técnicas..."></textarea>
+            </div>
+            <div class="form-group full" id="lbl-archivo-wrap" style="display:none;">
+              <label class="form-label">Archivo Adjunto Ficha Técnica</label>
+              <div id="lbl-archivo-content" style="margin-top:.3rem;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Seccion 4: Observaciones del Administrador ── -->
+        <div class="admin-detail-block" style="margin-bottom:0;">
+          <div class="admin-detail-head">📝 Observaciones para SAP / Notificación Solicitante</div>
+          <textarea id="edit_admin_notes" name="admin_notes" class="form-textarea" rows="2" placeholder="Ej: Aprobado y dado de alta en Maestro con número 20701924. Habilitado para Pañol y Compras."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer-fixed">
+        <div style="display:flex;gap:.5rem;">
+          <button type="button" class="btn-modal cancel" onclick="closeModal()">Cancelar</button>
+          <button type="button" class="btn-modal save-draft" onclick="submitCodeAction('save')">💾 Guardar Cambios</button>
+        </div>
+        <div style="display:flex;gap:.5rem;">
+          <button type="button" class="btn-modal reject" onclick="submitCodeAction('reject')">❌ Rechazar</button>
+          <button type="button" class="btn-modal approve" onclick="submitCodeAction('approve')">✅ Aprobar y Crear en SAP</button>
+        </div>
+      </div>
+    </form>
   </div>
 </div>
 
 <script>
 const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
-let currentType = null, currentPk = null;
+let currentCodePk = null;
 
-function doAction(type, pk, action) {
+function openCodeModal(pk) {
+  currentCodePk = pk;
+  document.getElementById('modal-req-id').value = pk;
+  document.getElementById('modal-title').textContent = `📝 Revisión y Enriquecimiento Solicitud #${pk}`;
+  document.getElementById('modal-subtitle').textContent = 'Cargando datos de la solicitud...';
+  document.getElementById('modal-overlay').classList.remove('hidden');
+
+  fetch(`/solicitudes/codigo/${pk}/detalle/`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) { alert('Error al cargar detalle'); closeModal(); return; }
+      const d = data.data;
+      document.getElementById('modal-subtitle').textContent = `Estado actual: ${d.status_display} · Solicitado el ${d.created_at}`;
+
+      // Informacion solicitante
+      document.getElementById('lbl-solicitante').textContent = d.solicitante_nombre;
+      document.getElementById('lbl-fecha').textContent = d.created_at;
+      document.getElementById('lbl-justificacion').textContent = d.justification || '(Sin justificación)';
+
+      if (d.base_sku) {
+        document.getElementById('lbl-base-sku').textContent = `${d.base_sku.item_code} - ${d.base_sku.item_name}`;
+        document.getElementById('lbl-base-sku-wrap').style.display = 'block';
+      } else {
+        document.getElementById('lbl-base-sku-wrap').style.display = 'none';
+      }
+
+      // Taxonomia
+      document.getElementById('edit_generated_code').value         = d.generated_code;
+      document.getElementById('edit_grupo_material').value         = d.grupo_material;
+      document.getElementById('edit_proposed_description').value   = d.proposed_description;
+      document.getElementById('edit_clase_propuesta').value        = d.clase_propuesta;
+      document.getElementById('edit_familia_propuesta').value      = d.familia_propuesta;
+      document.getElementById('edit_subfamilia_propuesta').value   = d.subfamilia_propuesta;
+      document.getElementById('edit_categoria_propuesta').value    = d.categoria_propuesta;
+
+      // Proveedor
+      document.getElementById('edit_proveedor_nombre').value           = d.proveedor_nombre;
+      document.getElementById('edit_codigo_catalogo_proveedor').value = d.codigo_catalogo_proveedor;
+      document.getElementById('edit_unidad_empaque').value             = d.unidad_empaque;
+      document.getElementById('edit_lote_minimo').value                 = d.lote_minimo;
+      document.getElementById('edit_precio_referencial').value          = d.precio_referencial;
+      document.getElementById('lbl-incoterm-moneda').textContent        = `${d.incoterm} (${d.moneda_precio}) · Importado: ${d.es_importado ? 'SÍ' : 'NO'}`;
+
+      // Ficha tecnica y archivo
+      document.getElementById('edit_ficha_tecnica').value = d.ficha_tecnica;
+      if (d.ficha_tecnica_archivo_url) {
+        document.getElementById('lbl-archivo-content').innerHTML =
+          `<a href="${d.ficha_tecnica_archivo_url}" target="_blank" class="file-download-btn">📄 Descargar Ficha Técnica (${d.ficha_tecnica_archivo_name})</a>`;
+        document.getElementById('lbl-archivo-wrap').style.display = 'block';
+      } else {
+        document.getElementById('lbl-archivo-wrap').style.display = 'none';
+      }
+
+      document.getElementById('edit_admin_notes').value = d.admin_notes;
+    })
+    .catch(() => { alert('Error de conexión al cargar detalle.'); closeModal(); });
+}
+
+function submitCodeAction(action) {
+  const pk = currentCodePk;
+  if (!pk) return;
+
+  const accionTxt = action === 'approve' ? 'APROBAR Y CREAR EN EL MAESTRO SAP' : (action === 'reject' ? 'RECHAZAR' : 'GUARDAR CAMBIOS');
+
+  if (action !== 'save') {
+    if (!confirm(`¿Confirmas ${accionTxt} para la solicitud #${pk}?`)) return;
+  }
+
+  const form = document.getElementById('admin-code-form');
+  const fd = new FormData(form);
+  fd.append('action', action);
+
+  fetch(`/solicitudes/codigo/${pk}/accion/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': CSRF },
+    body: fd
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      if (action === 'approve') {
+        alert(`✅ Solicitud #${pk} Aprobada con éxito. El artículo "${data.new_sku_code}" ha sido creado en el Maestro de Materiales SAP.`);
+      } else if (action === 'save') {
+        alert('💾 Cambios guardados correctamente.');
+      } else {
+        alert(`❌ Solicitud #${pk} rechazada.`);
+      }
+      closeModal();
+      location.reload();
+    } else {
+      alert('Error al procesar: ' + (data.error || 'Desconocido'));
+    }
+  })
+  .catch(() => alert('Error de red al guardar la acción.'));
+}
+
+function doPurchaseAction(pk, action) {
   const accionTxt = action === 'approve' ? 'APROBAR' : 'RECHAZAR';
-  if (!confirm(`¿Confirmas ${accionTxt} la solicitud #${pk}? Se notificará por correo a abastecimiento.`)) return;
-  const url = type === 'code'
-    ? `/solicitudes/codigo/${pk}/accion/`
-    : `/solicitudes/compra/${pk}/accion/`;
-  fetch(url, {
+  if (!confirm(`¿Confirmas ${accionTxt} la solicitud de compra #${pk}?`)) return;
+  fetch(`/solicitudes/compra/${pk}/accion/`, {
     method: 'POST',
     headers: {'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded'},
     body: `action=${action}&admin_notes=`
@@ -210,35 +546,13 @@ function doAction(type, pk, action) {
   .then(r => r.json())
   .then(data => {
     if (data.success) {
-      const badge = document.getElementById(`status-${type}-${pk}`);
-      if (badge) {
-        badge.textContent = data.new_status;
-        badge.className = `badge-status badge-${action === 'approve' ? 'aprobado' : 'rechazado'}`;
-      }
-      const row = document.getElementById(`${type === 'code' ? 'code' : 'purchase'}-row-${pk}`);
-      if (row) row.style.opacity = '0.55';
+      location.reload();
     }
   });
 }
 
-function showDetail(pk, type) {
-  currentPk = pk; currentType = type;
-  document.getElementById('modal-title').textContent = `Revisión Solicitud #${pk} (${type === 'code' ? 'Código' : 'Compra'})`;
-  document.getElementById('modal-overlay').classList.remove('hidden');
-  document.getElementById('btn-approve').onclick = () => submitModal('approve');
-  document.getElementById('btn-reject').onclick = () => submitModal('reject');
-}
-function closeModal() { document.getElementById('modal-overlay').classList.add('hidden'); }
-function submitModal(action) {
-  const notes = document.getElementById('modal-notes').value;
-  const url = currentType === 'code'
-    ? `/solicitudes/codigo/${currentPk}/accion/`
-    : `/solicitudes/compra/${currentPk}/accion/`;
-  fetch(url, {
-    method: 'POST',
-    headers: {'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded'},
-    body: `action=${action}&admin_notes=${encodeURIComponent(notes)}`
-  }).then(r => r.json()).then(data => { if (data.success) { closeModal(); location.reload(); }});
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
 }
 </script>
 {% endblock %}

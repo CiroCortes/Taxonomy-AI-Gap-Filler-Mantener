@@ -81,18 +81,195 @@ def solicitudes_dashboard_view(request):
 
 @login_required
 @user_passes_test(is_admin, login_url='/login/')
+def api_code_request_detail(request, pk):
+    """Retorna todos los detalles de una solicitud de código para el modal del Admin."""
+    obj = get_object_or_404(CodeCreationRequest, pk=pk)
+    base_info = None
+    if obj.base_sku:
+        base_info = {
+            'id': obj.base_sku.id,
+            'item_code': obj.base_sku.item_code,
+            'item_name': obj.base_sku.item_name,
+            'clase': obj.base_sku.clase or '',
+            'familia': obj.base_sku.familia or '',
+            'subfamilia': obj.base_sku.subfamilia or '',
+            'categoria': obj.base_sku.categoria or '',
+        }
+
+    file_url = obj.ficha_tecnica_archivo.url if obj.ficha_tecnica_archivo else None
+    file_name = obj.ficha_tecnica_archivo.name.rsplit('/', 1)[-1] if obj.ficha_tecnica_archivo else None
+
+    data = {
+        'id': obj.pk,
+        'solicitante_nombre': obj.solicitante_nombre,
+        'grupo_material': obj.grupo_material or '',
+        'generated_code': obj.generated_code or '',
+        'proposed_description': obj.proposed_description or '',
+        'justification': obj.justification or '',
+        'proveedor_nombre': obj.proveedor_nombre or '',
+        'codigo_catalogo_proveedor': obj.codigo_catalogo_proveedor or '',
+        'es_importado': obj.es_importado,
+        'moneda_precio': obj.moneda_precio or 'CLP',
+        'precio_referencial': str(obj.precio_referencial) if obj.precio_referencial is not None else '',
+        'lote_minimo': obj.lote_minimo or '',
+        'unidad_empaque': obj.unidad_empaque or '',
+        'incoterm': obj.incoterm or 'NA',
+        'ficha_tecnica': obj.ficha_tecnica or '',
+        'ficha_tecnica_archivo_url': file_url,
+        'ficha_tecnica_archivo_name': file_name,
+        'clase_propuesta': obj.clase_propuesta or '',
+        'familia_propuesta': obj.familia_propuesta or '',
+        'subfamilia_propuesta': obj.subfamilia_propuesta or '',
+        'categoria_propuesta': obj.categoria_propuesta or '',
+        'base_sku': base_info,
+        'status': obj.status,
+        'status_display': obj.get_status_display(),
+        'admin_notes': obj.admin_notes or '',
+        'created_at': obj.created_at.strftime('%d/%m/%Y %H:%M'),
+    }
+    return JsonResponse({'success': True, 'data': data})
+
+
+@login_required
+@user_passes_test(is_admin, login_url='/login/')
 def approve_code_request(request, pk):
+    """
+    Permite al Admin enriquecer datos de la solicitud y decidir si:
+    - 'approve': Aprueba y crea automáticamente el artículo en el Maestro (SKUItem).
+    - 'save': Guarda cambios de edición sin aprobar aún (mantiene estado).
+    - 'reject': Rechaza la solicitud con justificación.
+    """
     if request.method != 'POST':
         return JsonResponse({'success': False}, status=405)
     obj = get_object_or_404(CodeCreationRequest, pk=pk)
-    action = request.POST.get('action')
-    obj.admin_notes = request.POST.get('admin_notes', '').strip()
+    data = request.POST
+
+    action = data.get('action', 'save')
+
+    # Actualización de datos enriquecidos por el administrador
+    if 'generated_code' in data:
+        obj.generated_code = data.get('generated_code', '').strip() or None
+    if 'proposed_description' in data:
+        obj.proposed_description = data.get('proposed_description', '').strip()
+    if 'grupo_material' in data:
+        obj.grupo_material = data.get('grupo_material', '').strip() or None
+    if 'clase_propuesta' in data:
+        obj.clase_propuesta = data.get('clase_propuesta', '').strip() or None
+    if 'familia_propuesta' in data:
+        obj.familia_propuesta = data.get('familia_propuesta', '').strip() or None
+    if 'subfamilia_propuesta' in data:
+        obj.subfamilia_propuesta = data.get('subfamilia_propuesta', '').strip() or None
+    if 'categoria_propuesta' in data:
+        obj.categoria_propuesta = data.get('categoria_propuesta', '').strip() or None
+    if 'proveedor_nombre' in data:
+        obj.proveedor_nombre = data.get('proveedor_nombre', '').strip() or None
+    if 'codigo_catalogo_proveedor' in data:
+        obj.codigo_catalogo_proveedor = data.get('codigo_catalogo_proveedor', '').strip() or None
+    if 'unidad_empaque' in data:
+        obj.unidad_empaque = data.get('unidad_empaque', '').strip() or None
+    if 'ficha_tecnica' in data:
+        obj.ficha_tecnica = data.get('ficha_tecnica', '').strip() or None
+
+    lote_raw = data.get('lote_minimo', '').strip() if 'lote_minimo' in data else None
+    if lote_raw is not None:
+        try:
+            obj.lote_minimo = int(lote_raw) if lote_raw else None
+        except ValueError:
+            pass
+
+    precio_raw = data.get('precio_referencial', '').strip() if 'precio_referencial' in data else None
+    if precio_raw is not None:
+        try:
+            obj.precio_referencial = Decimal(precio_raw) if precio_raw else None
+        except Exception:
+            pass
+
+    if 'admin_notes' in data:
+        obj.admin_notes = data.get('admin_notes', '').strip()
+
+    sku_created = False
+    new_sku_code = None
+
     if action == 'approve':
         obj.status = 'aprobado'
+        # ── CREACIÓN AUTOMÁTICA EN EL MAESTRO DE MATERIALES (SKUItem) ──
+        code = (obj.generated_code or '').strip()
+        if code:
+            sku, _ = SKUItem.objects.get_or_create(item_code=code)
+            sku.item_name = obj.proposed_description or ''
+            sku.nombre_grupo = obj.grupo_material or ''
+            sku.clase = obj.clase_propuesta or ''
+            sku.familia = obj.familia_propuesta or ''
+            sku.subfamilia = obj.subfamilia_propuesta or ''
+            sku.categoria = obj.categoria_propuesta or ''
+            if obj.precio_referencial:
+                sku.costo_un = obj.precio_referencial
+                sku.moneda = obj.moneda_precio or 'CLP'
+            sku.check_incomplete()
+            sku.save()
+            sku_created = True
+            new_sku_code = sku.item_code
+        _enviar_correo_aprobacion(obj)
     elif action == 'reject':
         obj.status = 'rechazado'
+        _enviar_correo_rechazo(obj)
+
     obj.save()
-    return JsonResponse({'success': True, 'new_status': obj.get_status_display()})
+
+    return JsonResponse({
+        'success': True,
+        'new_status': obj.get_status_display(),
+        'status': obj.status,
+        'sku_created': sku_created,
+        'new_sku_code': new_sku_code
+    })
+
+
+def _enviar_correo_aprobacion(solicitud):
+    dest = getattr(settings, 'ABASTECIMIENTO_EMAIL', 'abastecimiento@pesco.cl')
+    try:
+        send_mail(
+            subject=f"[PESCO] Solicitud de Código #{solicitud.pk} APROBADA - Código SAP: {solicitud.generated_code}",
+            message=(
+                f"La solicitud de creación de código SAP #{solicitud.pk} ha sido APROBADA y dada de alta en el Maestro.\n\n"
+                f"Código SAP Asignado: {solicitud.generated_code}\n"
+                f"Descripción Definitiva: {solicitud.proposed_description}\n"
+                f"Solicitante: {solicitud.solicitante_nombre}\n"
+                f"Grupo de Material: {solicitud.grupo_material or '-'}\n"
+                f"Clase: {solicitud.clase_propuesta or '-'}\n"
+                f"Familia: {solicitud.familia_propuesta or '-'}\n"
+                f"Subfamilia: {solicitud.subfamilia_propuesta or '-'}\n"
+                f"Proveedor: {solicitud.proveedor_nombre or '-'}\n"
+                f"Cod. Catálogo Proveedor: {solicitud.codigo_catalogo_proveedor or '-'}\n\n"
+                f"Observaciones Admin: {solicitud.admin_notes or 'Sin observaciones.'}\n\n"
+                f"Portal de Gestión: http://127.0.0.1:8000/solicitudes/"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[dest],
+            fail_silently=True,
+        )
+    except Exception:
+        pass
+
+
+def _enviar_correo_rechazo(solicitud):
+    dest = getattr(settings, 'ABASTECIMIENTO_EMAIL', 'abastecimiento@pesco.cl')
+    try:
+        send_mail(
+            subject=f"[PESCO] Solicitud de Código #{solicitud.pk} RECHAZADA",
+            message=(
+                f"La solicitud de creación de código SAP #{solicitud.pk} ha sido RECHAZADA.\n\n"
+                f"Descripción solicitada: {solicitud.proposed_description}\n"
+                f"Solicitante: {solicitud.solicitante_nombre}\n\n"
+                f"Motivo / Observaciones del Administrador:\n{solicitud.admin_notes or 'No se especificó motivo.'}\n\n"
+                f"Portal de Gestión: http://127.0.0.1:8000/solicitudes/"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[dest],
+            fail_silently=True,
+        )
+    except Exception:
+        pass
 
 
 @login_required
@@ -111,45 +288,128 @@ def approve_purchase_request(request, pk):
     return JsonResponse({'success': True, 'new_status': obj.get_status_display()})
 
 
+
 @login_required
 def nueva_solicitud_codigo_view(request):
-    if request.method == 'POST':
-        data = request.POST
-        base_sku = None
-        base_sku_id = data.get('base_sku_id')
-        if base_sku_id:
-            try:
-                base_sku = SKUItem.objects.get(pk=int(base_sku_id))
-            except (SKUItem.DoesNotExist, ValueError):
-                pass
-        solicitud = CodeCreationRequest.objects.create(
-            base_sku=base_sku,
-            generated_code=data.get('generated_code', '').strip(),
-            solicitante_nombre=data.get('solicitante_nombre', '').strip(),
-            proposed_description=data.get('proposed_description', '').strip(),
-            justification=data.get('justification', '').strip(),
-            clase_propuesta=data.get('clase_propuesta', '').strip() or None,
-            familia_propuesta=data.get('familia_propuesta', '').strip() or None,
-            subfamilia_propuesta=data.get('subfamilia_propuesta', '').strip() or None,
-            categoria_propuesta=data.get('categoria_propuesta', '').strip() or None,
+    # Enviar al template los grupos de material disponibles en el Maestro
+    if request.method == 'GET':
+        grupos = list(
+            SKUItem.objects.exclude(nombre_grupo__isnull=True)
+            .exclude(nombre_grupo='')
+            .values_list('nombre_grupo', flat=True)
+            .distinct()
+            .order_by('nombre_grupo')
         )
-        _enviar_correo_creacion(solicitud)
-        return JsonResponse({'success': True, 'id': solicitud.pk})
-    return render(request, 'solicitudes/form_creacion_codigo.html')
+        return render(request, 'solicitudes/form_creacion_codigo.html', {'grupos_material': grupos})
+
+    # ── POST: guardar solicitud ────────────────────────────────────────────────
+    data = request.POST
+    files = request.FILES
+
+    base_sku = None
+    base_sku_id = data.get('base_sku_id')
+    if base_sku_id:
+        try:
+            base_sku = SKUItem.objects.get(pk=int(base_sku_id))
+        except (SKUItem.DoesNotExist, ValueError):
+            pass
+
+    # Precio referencial (puede venir vacío)
+    precio_ref = None
+    precio_raw = data.get('precio_referencial', '').strip()
+    if precio_raw:
+        try:
+            precio_ref = Decimal(precio_raw.replace(',', '.'))
+        except Exception:
+            pass
+
+    # Lote mínimo (puede venir vacío)
+    lote_min = None
+    lote_raw = data.get('lote_minimo', '').strip()
+    if lote_raw:
+        try:
+            lote_min = int(lote_raw)
+        except Exception:
+            pass
+
+    solicitud = CodeCreationRequest(
+        base_sku=base_sku,
+        generated_code=data.get('generated_code', '').strip() or None,
+        solicitante_nombre=data.get('solicitante_nombre', '').strip(),
+        grupo_material=data.get('grupo_material', '').strip() or None,
+        proposed_description=data.get('proposed_description', '').strip(),
+        justification=data.get('justification', '').strip(),
+        # Proveedor
+        proveedor_nombre=data.get('proveedor_nombre', '').strip() or None,
+        codigo_catalogo_proveedor=data.get('codigo_catalogo_proveedor', '').strip() or None,
+        es_importado=data.get('es_importado') == 'on',
+        moneda_precio=data.get('moneda_precio', 'CLP') or 'CLP',
+        precio_referencial=precio_ref,
+        lote_minimo=lote_min,
+        unidad_empaque=data.get('unidad_empaque', '').strip() or None,
+        incoterm=data.get('incoterm', 'NA') or 'NA',
+        # Ficha técnica
+        ficha_tecnica=data.get('ficha_tecnica', '').strip() or None,
+        # Taxonomía
+        clase_propuesta=data.get('clase_propuesta', '').strip() or None,
+        familia_propuesta=data.get('familia_propuesta', '').strip() or None,
+        subfamilia_propuesta=data.get('subfamilia_propuesta', '').strip() or None,
+        categoria_propuesta=data.get('categoria_propuesta', '').strip() or None,
+    )
+
+    # Archivo adjunto (PDF / JPG / PNG)
+    archivo = files.get('ficha_tecnica_archivo')
+    if archivo:
+        ext = archivo.name.rsplit('.', 1)[-1].lower()
+        if ext not in ('pdf', 'jpg', 'jpeg', 'png'):
+            return JsonResponse({'success': False, 'error': 'Formato de archivo no válido. Use PDF, JPG o PNG.'}, status=400)
+        solicitud.ficha_tecnica_archivo = archivo
+
+    solicitud.save()
+    _enviar_correo_creacion(solicitud)
+    return JsonResponse({'success': True, 'id': solicitud.pk})
 
 
 def _enviar_correo_creacion(solicitud):
     dest = getattr(settings, 'ABASTECIMIENTO_EMAIL', 'abastecimiento@pesco.cl')
-    base_info = f"Base: {solicitud.base_sku.item_code} - {solicitud.base_sku.item_name}" if solicitud.base_sku else "Sin codigo base"
+    base_info = (
+        f"Codigo base referencia: {solicitud.base_sku.item_code} - {solicitud.base_sku.item_name}"
+        if solicitud.base_sku else "Sin codigo base"
+    )
+    importado_str = "SÍ" if solicitud.es_importado else "No"
+    proveedor_block = (
+        f"\n── PROVEEDOR ──\n"
+        f"Proveedor: {solicitud.proveedor_nombre or '-'}\n"
+        f"Cod. Catálogo Proveedor: {solicitud.codigo_catalogo_proveedor or '-'}\n"
+        f"Artículo importado: {importado_str}\n"
+        f"Precio referencial: {solicitud.moneda_precio} {solicitud.precio_referencial or '-'}\n"
+        f"Lote mínimo: {solicitud.lote_minimo or '-'} uds\n"
+        f"Unidad de empaque: {solicitud.unidad_empaque or '-'}\n"
+        f"Incoterm: {solicitud.incoterm}\n"
+    )
+    ficha_block = (
+        f"\n── FICHA TÉCNICA ──\n{solicitud.ficha_tecnica}"
+        if solicitud.ficha_tecnica else ""
+    )
+    archivo_block = (
+        f"\nArchivo adjunto: {solicitud.ficha_tecnica_archivo.name}"
+        if solicitud.ficha_tecnica_archivo else ""
+    )
     try:
         send_mail(
-            subject=f"[PESCO] Nueva Solicitud de Codigo #{solicitud.pk} - {solicitud.solicitante_nombre}",
+            subject=f"[PESCO] Nueva Solicitud de Código #{solicitud.pk} - {solicitud.solicitante_nombre}",
             message=(
-                f"Nueva solicitud de creacion de codigo SAP.\n\n"
-                f"ID: #{solicitud.pk}\nSolicitante: {solicitud.solicitante_nombre}\n"
-                f"Codigo propuesto: {solicitud.generated_code or 'Pendiente'}\n"
-                f"Descripcion: {solicitud.proposed_description}\n"
-                f"Motivo: {solicitud.justification}\n{base_info}\n\n"
+                f"Nueva solicitud de creación de código SAP.\n\n"
+                f"ID: #{solicitud.pk}\n"
+                f"Solicitante: {solicitud.solicitante_nombre}\n"
+                f"Grupo de Material: {solicitud.grupo_material or '-'}\n"
+                f"Código propuesto: {solicitud.generated_code or 'Pendiente'}\n"
+                f"Descripción: {solicitud.proposed_description}\n"
+                f"Motivo: {solicitud.justification}\n"
+                f"{base_info}"
+                f"{proveedor_block}"
+                f"{ficha_block}"
+                f"{archivo_block}\n\n"
                 f"Portal: http://127.0.0.1:8000/solicitudes/"
             ),
             from_email=settings.DEFAULT_FROM_EMAIL,
@@ -256,6 +516,7 @@ def api_ai_assistant(request):
         descripcion = body.get('descripcion', '').strip()
         justificacion = body.get('justificacion', '').strip()
         base_item_name = body.get('base_item_name', '').strip()
+        grupo_material = body.get('grupo_material', '').strip()
         tipo = body.get('tipo', 'codigo')
 
         api_key = os.getenv('GOOGLE_API_KEY') or os.getenv('GEMINI_API_KEY')
@@ -265,18 +526,80 @@ def api_ai_assistant(request):
         client = genai.Client(api_key=api_key)
 
         if tipo == 'codigo':
-            prompt = f"""Eres un experto en catalogos de maestros de articulos para una empresa industrial y de construccion (PESCO S.A.).
-Mejora y estandariza la descripcion del nuevo articulo siguiendo el estilo SAP de PESCO.
+            # ── Extraer palabras clave para la búsqueda inteligente de contexto
+            stop_words = {'CON', 'PARA', 'POR', 'SIN', 'DEL', 'LOS', 'LAS', 'UNA', 'UNO', 'DE', 'EL', 'LA', 'ANTE', 'BAJO', 'CADA'}
+            words = [w.strip().upper() for w in descripcion.split() if len(w.strip()) > 2 and w.strip().upper() not in stop_words]
 
-Articulo base de referencia: "{base_item_name}"
+            skus_contexto = []
+            seen_codes = set()
+
+            # Prioridad 1: Coincidencia por palabras clave dentro del mismo grupo
+            if grupo_material and words:
+                q_kw = Q()
+                for w in words:
+                    q_kw |= Q(item_name__icontains=w)
+                p1 = SKUItem.objects.filter(Q(nombre_grupo__iexact=grupo_material) & q_kw).values(
+                    'item_code', 'item_name', 'clase', 'familia', 'subfamilia', 'nombre_grupo'
+                )[:6]
+                for item in p1:
+                    if item['item_code'] not in seen_codes:
+                        skus_contexto.append(item)
+                        seen_codes.add(item['item_code'])
+
+            # Prioridad 2: Coincidencia por palabras clave a nivel todo el Maestro
+            if words and len(skus_contexto) < 8:
+                q_kw = Q()
+                for w in words:
+                    q_kw |= Q(item_name__icontains=w)
+                p2 = SKUItem.objects.filter(q_kw).exclude(item_code__in=seen_codes).values(
+                    'item_code', 'item_name', 'clase', 'familia', 'subfamilia', 'nombre_grupo'
+                )[:6]
+                for item in p2:
+                    if item['item_code'] not in seen_codes:
+                        skus_contexto.append(item)
+                        seen_codes.add(item['item_code'])
+
+            # Prioridad 3: Artículos generales del mismo grupo
+            if grupo_material and len(skus_contexto) < 10:
+                p3 = SKUItem.objects.filter(nombre_grupo__iexact=grupo_material).exclude(
+                    item_code__in=seen_codes
+                ).values('item_code', 'item_name', 'clase', 'familia', 'subfamilia', 'nombre_grupo')[:6]
+                for item in p3:
+                    if item['item_code'] not in seen_codes:
+                        skus_contexto.append(item)
+                        seen_codes.add(item['item_code'])
+
+            contexto_str = "\n".join(
+                f"  - [{s['item_code']}] {s['item_name']} (Grupo: {s.get('nombre_grupo') or '-'}, Clase: {s.get('clase') or '-'})"
+                for s in skus_contexto
+            ) if skus_contexto else "  (No se encontraron artículos similares en el maestro)"
+
+            prompt = f"""Eres un experto en catalogos de maestros de articulos para PESCO S.A., empresa industrial.
+Tu tarea es: (1) mejorar la descripcion del nuevo articulo al estandar SAP de PESCO, y (2) sugerir el codigo SAP existente mas adecuado como referencia base para derivar el correlativo numérico.
+
+Grupo de material solicitante: "{grupo_material or 'No especificado'}"
 Descripcion ingresada: "{descripcion}"
 Justificacion: "{justificacion}"
+Articulo base seleccionado manualmente: "{base_item_name or 'Ninguno'}"
+
+Codigos existentes en el Maestro para este grupo/descripcion:
+{contexto_str}
+
+Instrucciones OBLIGATORIAS:
+- "descripcion_mejorada": Estandariza en MAYUSCULAS, concisa (max 100 caracteres), formato SAP.
+- "codigo_referencia_sugerido": DEBES ELEGIR el item_code del listado de contexto que sea mas similar funcionalmente, semánticamente o por categoría al articulo solicitado (dando preferencia a los articulos del mismo grupo "{grupo_material}"). SE REQUIERE UN CODIGO DE REFERENCIA PARA GENERAR EL CORRELATIVO SAP. Solo devuelve null si el listado de contexto esta 100% vacio.
+- "nombre_referencia_sugerido": El item_name del codigo sugerido. Si null, devuelve null.
+- "sugerencias": Lista de 2-3 consejos para completar mejor la solicitud.
+- "advertencias": Alertas si falta info critica o hay riesgo de duplicado.
+- "completitud_score": Porcentaje 0-100 de que tan completa esta la solicitud.
 
 Responde SOLO en JSON sin texto adicional:
 {{
-  "descripcion_mejorada": "descripcion estandarizada en mayusculas, concisa (max 100 caracteres)",
-  "sugerencias": ["consejo 1", "consejo 2"],
-  "advertencias": ["advertencia si hay riesgo de duplicado o info faltante"],
+  "descripcion_mejorada": "...",
+  "codigo_referencia_sugerido": "20701539",
+  "nombre_referencia_sugerido": "NOMBRE DEL ARTICULO REFERENCIA",
+  "sugerencias": ["...", "..."],
+  "advertencias": ["..."],
   "completitud_score": 85
 }}"""
         else:
@@ -294,15 +617,35 @@ Responde SOLO en JSON sin texto adicional:
   "completitud_score": 85
 }}"""
 
-        response = client.models.generate_content(
-            model='gemini-3.6-flash',
-            contents=prompt,
-            config=genai_types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.3,
-            )
-        )
+        models_to_try = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash']
+        response = None
+        last_err = None
+        for m in models_to_try:
+            try:
+                response = client.models.generate_content(
+                    model=m,
+                    contents=prompt,
+                    config=genai_types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.25,
+                    )
+                )
+                break
+            except Exception as err:
+                last_err = err
+
+        if not response:
+            raise Exception(f"No se pudo contactar Gemini API: {last_err}")
+
         result = json.loads(response.text)
+
+        # Fallback determinista si Gemini devolvió null pero hay candidatos de contexto
+        if tipo == 'codigo' and not result.get('codigo_referencia_sugerido') and skus_contexto:
+            top_sku = skus_contexto[0]
+            result['codigo_referencia_sugerido'] = top_sku['item_code']
+            result['nombre_referencia_sugerido'] = top_sku['item_name']
+
         return JsonResponse({'success': True, **result})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+

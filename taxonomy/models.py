@@ -52,6 +52,20 @@ class CodeCreationRequest(models.Model):
         ('aprobado', 'Aprobado'),
         ('rechazado', 'Rechazado'),
     ]
+    MONEDA_CHOICES = [
+        ('CLP', 'CLP – Peso Chileno'),
+        ('USD', 'USD – Dólar'),
+        ('EUR', 'EUR – Euro'),
+        ('BRL', 'BRL – Real Brasileño'),
+    ]
+    INCOTERM_CHOICES = [
+        ('EXW', 'EXW – Ex Works'),
+        ('FOB', 'FOB – Free on Board'),
+        ('CIF', 'CIF – Cost, Insurance & Freight'),
+        ('DDP', 'DDP – Delivered Duty Paid'),
+        ('DAP', 'DAP – Delivered at Place'),
+        ('NA',  'N/A – No aplica'),
+    ]
 
     base_sku = models.ForeignKey(
         SKUItem, null=True, blank=True, on_delete=models.SET_NULL,
@@ -62,10 +76,47 @@ class CodeCreationRequest(models.Model):
         help_text="Código correlativo sugerido por el sistema."
     )
     solicitante_nombre = models.CharField(max_length=150, help_text="Nombre real o área del solicitante.")
+    grupo_material = models.CharField(
+        max_length=100, blank=True, null=True,
+        help_text="Grupo de materiales / área de donde proviene la solicitud (ej: EQUIPOS EPP)."
+    )
     proposed_description = models.TextField(help_text="Descripción del nuevo ítem (mejorada con IA).")
     justification = models.TextField(help_text="Motivo de la creación del nuevo código.")
 
-    # Campos de taxonomía propuestos para el nuevo SKU
+    # ── Datos del Proveedor ────────────────────────────────────────────────────
+    proveedor_nombre = models.CharField(max_length=200, blank=True, null=True, help_text="Nombre del proveedor.")
+    codigo_catalogo_proveedor = models.CharField(
+        max_length=100, blank=True, null=True,
+        help_text="Código del artículo en el catálogo del proveedor (ej: CSE4P-015)."
+    )
+    es_importado = models.BooleanField(default=False, help_text="¿El artículo es importado / internacional?")
+    moneda_precio = models.CharField(max_length=5, choices=MONEDA_CHOICES, default='CLP', blank=True)
+    precio_referencial = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        help_text="Precio referencial unitario."
+    )
+    lote_minimo = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Lote mínimo de compra (cantidad mínima que acepta el proveedor)."
+    )
+    unidad_empaque = models.CharField(
+        max_length=50, blank=True, null=True,
+        help_text="Unidad/medida de empaque (ej: Caja x 12, UN, KG, MT)."
+    )
+    incoterm = models.CharField(max_length=5, choices=INCOTERM_CHOICES, default='NA', blank=True)
+
+    # ── Ficha Técnica ─────────────────────────────────────────────────────────
+    ficha_tecnica = models.TextField(
+        blank=True, null=True,
+        help_text="Especificaciones técnicas del artículo (texto libre)."
+    )
+    ficha_tecnica_archivo = models.FileField(
+        upload_to='fichas_tecnicas/%Y/%m/',
+        blank=True, null=True,
+        help_text="Adjunto de ficha técnica (PDF, JPG, PNG). Máx 20 MB."
+    )
+
+    # ── Campos de taxonomía propuestos para el nuevo SKU ─────────────────────
     clase_propuesta = models.CharField(max_length=100, blank=True, null=True)
     familia_propuesta = models.CharField(max_length=100, blank=True, null=True)
     subfamilia_propuesta = models.CharField(max_length=100, blank=True, null=True)

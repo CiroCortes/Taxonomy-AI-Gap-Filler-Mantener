@@ -70,6 +70,15 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# ─── Archivos multimedia (fichas técnicas, etc.) ───────────────────────────────
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Límite de subida: 20 MB (suficiente para PDF y fotos técnicas)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024
+
+
 # ─── Autenticación ─────────────────────────────────────────────────────────────
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'

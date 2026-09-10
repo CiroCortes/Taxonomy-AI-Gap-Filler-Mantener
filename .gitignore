@@ -26,3 +26,8 @@ _temp_*.xlsx
 .idea/
 .DS_Store
 Thumbs.db
+
+# Subidas de usuario y scripts temporales
+media/
+scratch/
+
