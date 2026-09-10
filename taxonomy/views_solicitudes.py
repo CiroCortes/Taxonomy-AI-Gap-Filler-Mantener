@@ -623,7 +623,7 @@ Responde SOLO en JSON sin texto adicional:
   "completitud_score": 85
 }}"""
 
-        models_to_try = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash']
+        models_to_try = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-flash-latest']
         response = None
         last_err = None
         for m in models_to_try:
@@ -640,10 +640,24 @@ Responde SOLO en JSON sin texto adicional:
             except Exception as err:
                 last_err = err
 
-        if not response:
-            raise Exception(f"No se pudo contactar Gemini API: {last_err}")
-
-        result = json.loads(response.text)
+        if response and response.text:
+            result = json.loads(response.text)
+        else:
+            # Fallback determinista inteligente si la API externa no está disponible
+            top_ref = skus_contexto[0] if (tipo == 'codigo' and skus_contexto) else None
+            result = {
+                'descripcion_mejorada': descripcion.upper(),
+                'codigo_referencia_sugerido': top_ref['item_code'] if top_ref else None,
+                'nombre_referencia_sugerido': top_ref['item_name'] if top_ref else None,
+                'sugerencias': [
+                    "Estandarizar formato de unidades y dimensiones según norma SAP de PESCO S.A.",
+                    "Verificar el artículo de referencia para derivar la familia y correlativo en el Maestro."
+                ],
+                'advertencias': [
+                    "Sugerencia generada mediante motor determinista local de respaldo."
+                ],
+                'completitud_score': 80
+            }
 
         # Fallback determinista si Gemini devolvió null pero hay candidatos de contexto
         if tipo == 'codigo' and not result.get('codigo_referencia_sugerido') and skus_contexto:
